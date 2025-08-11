@@ -1,5 +1,5 @@
-# cat auto.sh                                                                                                             [18:01:47]
 #!/bin/bash
+
 echo
 echo -e "[+] World \e[31mOFF\e[0m,Terminal \e[32mON \e[0m"
 echo -e "                                 _____
@@ -11,42 +11,66 @@ echo -e "                                 _____
 "
 echo -e "[+] Make \e[31mCritical\e[0m great again"
 echo
-ORG="${1:-}"
-[ -z "$ORG" ] && { echo "Usage: $0 <organization>"; exit 1; }
 
-bash gitSearch.sh $ORG
-echo
-echo -e "[+] World \e[31mOFF\e[0m,Terminal \e[32mON \e[0m"
-dir="output/${ORG}_supplyChain"
-[ ! -d "$dir" ] && { echo "Error: Directory '$dir' not found"; exit 1; }
+if [[ $# -lt 2 ]]; then
+    echo "Usage: $0 <domain> <github_org>"
+    exit 1
+fi
+
+DOMAIN="$1"
+ORG="$2"
+bash find_enployees.sh ${DOMAIN} ${ORG}
+EMPLOYEE_FILE="${ORG}_employees.txt"
+
+if [[ ! -f "$EMPLOYEE_FILE" ]]; then
+    echo -e "\e[31m[!] Employee file not found: $EMPLOYEE_FILE\e[0m"
+    exit 1
+fi
+
+OUTPUT_DIR="output/${ORG}_supplyChain"
+mkdir -p "$OUTPUT_DIR"
+
+echo -e "\e[34m[+] Scanning organization: $ORG\e[0m"
+bash gitSearch.sh "$ORG"
+
+while IFS= read -r user; do
+    [[ -z "$user" ]] && continue
+    
+    echo -e "\e[32m[+] Scanning user: $user\e[0m"
+    bash gitSearch.sh "$user"
+done < "$EMPLOYEE_FILE"
+
+echo -e "\e[34m[+] Running dependency checks\e[0m"
 
 ext=(
-json
-rb
-txt
+    "json:NPM Dependencies"
+    "txt:Python Dependencies"
+    "rb:Ruby Dependencies"
 )
 
-for a in "${ext[@]}"; do
-    if [[ "$a" == "json" ]];then
-             echo -e "\e[31m[-] Checking NPM Dependencies\e[0m"
-        elif [[ "$a" == "txt" ]];then
-             echo -e "\e[31m[-] Checking Python Dependencies\e[0m"
-        elif [[ "$a" == "rb" ]];then
-             echo -e "\e[31m[-] Checking Ruby Dependencies\e[0m"
-        else
-         exit 1
-        fi
-
+for entry in "${ext[@]}"; do
+    ext_type="${entry%%:*}"
+    label="${entry#*:}"
+    
+    echo -e "\e[31m[-] Checking $label\e[0m"
+    
     while IFS= read -r -d '' file; do
         filename=$(basename "$file")
-        if [[ "$a" == "json" ]];then
-            bash depChecker.sh --npm $dir/$filename
-        elif [[ "$a" == "txt" ]];then
-            bash depChecker.sh --pip $dir/$filename
-        elif [[ "$a" == "rb" ]];then
-            bash depChecker.sh --gem $dir/$filename
-        else
-         exit 1
-        fi
-    done < <(find "$dir" -maxdepth 1 -type f -name "*.$a" -print0 2>/dev/null)
+        echo -e "\e[33m[→] Processing $filename\e[0m"
+        
+        case "$ext_type" in
+            "json")
+                bash depChecker.sh --npm "$file"
+                ;;
+            "txt")
+                bash depChecker.sh --pip "$file"
+                ;;
+            "rb")
+                bash depChecker.sh --gem "$file"
+                ;;
+        esac
+    done < <(find "$OUTPUT_DIR" -maxdepth 1 -type f -name "*.$ext_type" -print0 2>/dev/null)
 done
+
+echo
+echo -e "[+] World \e[31mOFF\e[0m,Terminal \e[32mON \e[0m"
