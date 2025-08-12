@@ -33,5 +33,9 @@ echo
 echo "[*] Final valid GitHub organizations:"
 printf "%s\n" "${valid_orgs[@]}" | sort -u >> Immunefi_web3
 
+for i in $(cat Immunefi_web3);do
+trufflehog github --only-verified --token=${GITHUB_TOKEN} --issue-comments --pr-comments --gist-comments --include-members --archive-max-depth=50 --org=$i
+done
+
 cd ../..
 rm -rf tmp_repo
