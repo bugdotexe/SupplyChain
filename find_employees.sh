@@ -147,7 +147,7 @@ fetch_org_members() {
         response=$(github_api_request "https://api.github.com/orgs/${ORG}/members?per_page=100&page=${page}")
         [[ -z "$response" ]] && break
         
-        echo "$response" | jq -r '.[].login' >> "${DOMAIN}_employees.txt"
+        echo "$response" | jq -r '.[].login' >> "${ORG}_employees.txt"
         
         # Check for next page using headers
         next_url=$(curl -sI -H "Authorization: token $GITHUB_TOKEN" \
@@ -169,7 +169,7 @@ search_by_email() {
         github_api_request "https://api.github.com/search/users?q=${email}" |
             jq -r '.items[].login' >> "${ORG}_employees.txt"
         sleep 1
-    done < "${DOMAIN}.emails"
+    done < "${ORG}.emails"
 }
 
 validate_users() {
