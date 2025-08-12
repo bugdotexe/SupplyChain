@@ -19,7 +19,7 @@ fi
 
 DOMAIN="$1"
 ORG="$2"
-bash find_enployees.sh ${DOMAIN} ${ORG}
+bash find_employees.sh ${DOMAIN} ${ORG}
 EMPLOYEE_FILE="${ORG}_employees.txt"
 
 if [[ ! -f "$EMPLOYEE_FILE" ]]; then
