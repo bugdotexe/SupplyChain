@@ -32,12 +32,14 @@ mkdir -p "$OUTPUT_DIR"
 
 echo -e "\e[34m[+] Scanning organization: $ORG\e[0m"
 bash gitSearch.sh "$ORG"
+python3 force_push_scanner/force_push_scanner.py --scan --db-file=force_push_scanner/force_push_commits.sqlite3 $ORG
 
 while IFS= read -r user; do
     [[ -z "$user" ]] && continue
     
     echo -e "\e[32m[+] Scanning user: $user\e[0m"
     bash gitSearch.sh "$user"
+    python3 force_push_scanner/force_push_scanner.py --scan --db-file=force_push_scanner/force_push_commits.sqlite3 $user
 done < "$EMPLOYEE_FILE"
 
 echo -e "\e[34m[+] Running dependency checks\e[0m"
