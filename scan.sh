@@ -74,5 +74,12 @@ for entry in "${ext[@]}"; do
     done < <(find "$OUTPUT_DIR" -maxdepth 1 -type f -name "*.$ext_type" -print0 2>/dev/null)
 done
 
+echo -e "\n[+] Extracting Docker images from docker-compose.yml"
+grep -h "image:" "$OUTPUT_DIR"/*.yml 2>/dev/null | awk '{print $2}' | cut -d ":" | sort -u | while read -r IMAGE; do
+    if [[ -n "$IMAGE" ]]; then
+        bash docker.sh "$IMAGE"
+    fi
+done
+
 echo
 echo -e "[+] World \e[31mOFF\e[0m,Terminal \e[32mON \e[0m"
