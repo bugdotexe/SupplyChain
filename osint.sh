@@ -22,15 +22,12 @@ RESULTS_DIR="$DOMAIN"
 mkdir -p "$RESULTS_DIR"
 
 echo -e "${GREEN}[+] Starting GitHub OSINT for domain: $DOMAIN${NC}"
-echo -e "${GREEN}[+] Results will be saved in: $RESULTS_DIR${NC}"
-
 domain_to_org_names() {
     local domain=$1
     local base_name=$(echo "$domain" | cut -d. -f1)
     local tld=$(echo "$domain" | cut -d. -f2)
     local no_dots=$(echo "$domain" | tr -d '.')
-
-    echo "$no_dots"
+    
     echo "$base_name"
     echo "${base_name}-${tld}"
     echo "${base_name}-inc"
@@ -42,6 +39,14 @@ domain_to_org_names() {
     echo "${base_name}io"
     echo "${base_name}app"
     echo "${base_name}cloud"
+    echo "${base_name}-Cash"
+    echo "${base_name}-protocol"
+    echo "${base_name}-dao"
+    echo "${base_name}-pool"
+    echo "${base_name}-network"
+    echo "${base_name}-labs"
+    echo "${base_name}-fi"
+    echo "$no_dots"
 }
 
 github_api() {
@@ -84,7 +89,6 @@ echo -e "${GREEN}[+] Found $repos_count repositories mentioning $DOMAIN${NC}"
 
 jq -r '.items[].owner.login' "$RESULTS_DIR/domain_repositories_response.json" 2>/dev/null | sort -u > "$RESULTS_DIR/potential_orgs_from_repos.txt"
 
-echo -e "${CYAN}[+] Searching for organizations with $DOMAIN in their website/blog${NC}"
 search_github "users" "type:org $DOMAIN in:blog" | jq . > "$RESULTS_DIR/orgs_with_domain_in_blog.json"
 orgs_blog_count=$(count_items "$RESULTS_DIR/orgs_with_domain_in_blog.json")
 echo -e "${GREEN}[+] Found $orgs_blog_count organizations with $DOMAIN in their blog${NC}"
@@ -93,20 +97,17 @@ jq -r '.items[].login' "$RESULTS_DIR/orgs_with_domain_in_blog.json" 2>/dev/null 
 
 sort -u "$RESULTS_DIR/potential_orgs_from_repos.txt" > "$RESULTS_DIR/potential_orgs.txt"
 
-echo -e "${CYAN}[+] Checking potential organizations from repositories and blog links${NC}"
 CONFIRMED_ORG=""
 BEST_MATCH=""
 BEST_MATCH_SCORE=0
 
 while read -r org_name; do
     if [ -n "$org_name" ]; then
-        echo -e "${BLUE}[+] Checking organization: $org_name${NC}"
         org_result=$(github_api "orgs/$org_name")
         if [ "$(echo "$org_result" | jq -r '.message' 2>/dev/null)" != "Not Found" ]; then
             echo "$org_result" | jq . > "$RESULTS_DIR/organization.json"
             org_url=$(echo "$org_result" | jq -r '.html_url')
             blog_url=$(echo "$org_result" | jq -r '.blog')
-            echo -e "${GREEN}[+] Found organization: $org_url${NC}"
             
             match_score=0
             
@@ -139,18 +140,15 @@ while read -r org_name; do
 done < "$RESULTS_DIR/potential_orgs.txt"
 
 if [ -z "$CONFIRMED_ORG" ]; then
-    echo -e "${YELLOW}[+] No confirmed organization found, trying common patterns${NC}"
     
     ORG_NAMES=($(domain_to_org_names "$DOMAIN" | sort -u))
     
     for org_name in "${ORG_NAMES[@]}"; do
-        echo -e "${BLUE}[+] Trying pattern: $org_name${NC}"
         org_result=$(github_api "orgs/$org_name")
         if [ "$(echo "$org_result" | jq -r '.message' 2>/dev/null)" != "Not Found" ]; then
             echo "$org_result" | jq . > "$RESULTS_DIR/organization.json"
             org_url=$(echo "$org_result" | jq -r '.html_url')
             blog_url=$(echo "$org_result" | jq -r '.blog')
-            echo -e "${GREEN}[+] Found organization: $org_url${NC}"
             
             match_score=0
             
@@ -188,6 +186,7 @@ if [ -z "$CONFIRMED_ORG" ] && [ -n "$BEST_MATCH" ] && [ $BEST_MATCH_SCORE -gt 0 
     CONFIRMED_ORG="$BEST_MATCH"
     org_result=$(github_api "orgs/$CONFIRMED_ORG")
     echo "$org_result" | jq . > "$RESULTS_DIR/organization.json"
+    echo -e "${GREEN}[+] Confirmed : $CONFIRMED_ORG ${NC}"
 fi
 
 echo -e "${CYAN}[+] Searching for users associated with $DOMAIN${NC}"
