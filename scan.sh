@@ -74,17 +74,18 @@ for entry in "${ext[@]}"; do
     done < <(find "$OUTPUT_DIR" -maxdepth 1 -type f -name "*.$ext_type" -print0 2>/dev/null)
 done
 
+echo -e "\e[34m[+] Scanning JavaScript Files \e[0m"
 bash js.sh $OUTPUT_DIR/*.js | 
 while read -r package; do
   echo "Checking package: $package"
   if npm view "$package" >/dev/null 2>&1; then
-    echo "✓ $package exists in npm registry"
+    echo -e "\e[32m [+]\e[0m \e[31m$package\e[0m exist on NPM\e[0m"
   else
-    echo "✗ $package not found in npm registry"
+    echo -e "\e[32m [+]\e[0m \e[31m$package\e[0m does NOT exist on NPM\e[0m"
   fi
 done
 
-echo -e "\n[+] Extracting Docker images from docker-compose.yml"
+echo -e "\e[32m\n[+] Extracting Docker images from docker-compose.yml \e[0m"
 grep -h "image:" "$OUTPUT_DIR"/*.yml 2>/dev/null | awk '{print $2}' | cut -d ":" | sort -u | while read -r IMAGE; do
     if [[ -n "$IMAGE" ]]; then
         bash docker.sh "$IMAGE"
