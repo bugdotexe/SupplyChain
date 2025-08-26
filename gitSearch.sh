@@ -59,21 +59,28 @@ while IFS= read -r REPO; do
         fi
     done
 
-    gh api "repos/$REPO/git/trees/$BRANCH?recursive=1" --jq '.tree[] | select(.path | test("package.json$|package-lock.json$|Pipfile$|pyproject.toml$|poetry.lock$|Pipfile.lock$|requirements.txt$|Gemfile$|Gemfile.lock$|\\*.gemspec"|pom.xml$|setting.xml$)) | .path' 2>/dev/null | \
-    while read -r NESTED_PATH; do
+    gh api "repos/$REPO/git/trees/$BRANCH?recursive=1" --jq '.tree[] | .path' 2>/dev/null | while read -r NESTED_PATH; do
         EXT="${NESTED_PATH##*.}"
-        [[ "$NESTED_PATH" == *Gemfile ||  "$NESTED_PATH" == *Gemfile.lock ||  "$NESTED_PATH" == *.gemspec ]] && EXT="rb"
-        [[ "$NESTED_PATH" == *Pipfile ||  "$NESTED_PATH" == *Pipfile.lock ||  "$NESTED_PATH" == *poetry.lock ||  "$NESTED_PATH" == *pyproject.toml ]] && EXT="txt"
-        download_file "$REPO" "$BRANCH" "$NESTED_PATH" "$EXT"
+        
+        if [[ "$NESTED_PATH" =~ (package.json|package-lock.json|Pipfile|pyproject.toml|poetry.lock|Pipfile.lock|requirements.txt|Gemfile|Gemfile.lock|\.gemspec|pom.xml|setting.xml|docker-compose.yml)$ ]]; then
+            [[ "$NESTED_PATH" == *Gemfile || "$NESTED_PATH" == *Gemfile.lock || "$NESTED_PATH" == *.gemspec ]] && EXT="rb"
+            [[ "$NESTED_PATH" == *Pipfile || "$NESTED_PATH" == *Pipfile.lock || "$NESTED_PATH" == *poetry.lock || "$NESTED_PATH" == *pyproject.toml ]] && EXT="txt"
+            download_file "$REPO" "$BRANCH" "$NESTED_PATH" "$EXT"
+        fi
+
+    
+        if [[ "$EXT" == "js" ]]; then
+            download_file "$REPO" "$BRANCH" "$NESTED_PATH" "js"
+        fi
     done
 
 done <<< "$REPO_LIST"
 
-
+# ---- Final stats ----
 echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "json" | wc -l)\e[0m package.json"
 echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "txt" | wc -l)\e[0m requirements.txt"
 echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "rb" | wc -l)\e[0m Gemfiles"
 echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "xml" | wc -l)\e[0m Maven files"
 echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "yml" | wc -l)\e[0m Docker files"
-echo
+echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "js" | wc -l)\e[0m JS files"
 echo
