@@ -76,6 +76,13 @@ while IFS= read -r REPO; do
 
 done <<< "$REPO_LIST"
 
+echo -e "\n${GREEN}[+] Extracting Docker images from docker-compose.yml${RESET}"
+grep -h "image:" "$OUTPUT_DIR"/*.yml 2>/dev/null | awk '{print $2}' | cut -d ":" | sort -u | while read -r IMAGE; do
+    if [[ -n "$IMAGE" ]]; then
+        bash docker.sh "$IMAGE"
+    fi
+done
+
 # ---- Final stats ----
 echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "json" | wc -l)\e[0m package.json"
 echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "txt" | wc -l)\e[0m requirements.txt"
