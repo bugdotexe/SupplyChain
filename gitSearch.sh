@@ -12,6 +12,8 @@ COUNTERS["json"]=1
 COUNTERS["txt"]=1
 COUNTERS["rb"]=1
 COUNTERS["xml"]=1
+COUNTERS["yml"]=1
+COUNTERS["js"]=1
 
 echo -e "\e[33m🔍\e[0m Searching \e[31m$ORG\e[0m repositories..."
 REPO_LIST=$(gh search repos --owner "$ORG" --json name,owner --jq '.[] | .owner.login + "/" + .name' --limit 1000)
@@ -48,7 +50,7 @@ while IFS= read -r REPO; do
     echo -e "\e[31m📦\e[0m Processing $REPO"
     BRANCH=$(gh repo view "$REPO" --json defaultBranchRef --jq '.defaultBranchRef.name')
 
-    for FILE in "package.json" "package-lock.json" "Pipfile" "pyproject.toml" "poetry.lock" "Pipfile.lock" "requirements.txt" "Gemfile" "*.gemspec" "Gemfile.lock" "pom.xml" "setting.xml"; do
+    for FILE in "package.json" "package-lock.json" "Pipfile" "pyproject.toml" "poetry.lock" "Pipfile.lock" "requirements.txt" "Gemfile" "*.gemspec" "Gemfile.lock" "pom.xml" "setting.xml" "docker-compose.yml"; do
         EXT="${FILE##*.}"
         [[ "$FILE" == "Gemfile" || "$FILE" == "*.gemspec" || "$FILE" == "Gemfile.lock" ]] && EXT="rb"
         [[ "$FILE" == "Pipfile" || "$FILE" == "pyproject.toml" || "$FILE" == "poetry.lock" || "$FILE" == "Pipfile.lock" ]] && EXT="txt"
@@ -72,5 +74,6 @@ echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "json" | wc -l)\e[0m pa
 echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "txt" | wc -l)\e[0m requirements.txt"
 echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "rb" | wc -l)\e[0m Gemfiles"
 echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "xml" | wc -l)\e[0m Maven files"
+echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "yml" | wc -l)\e[0m Docker files"
 echo
 echo
