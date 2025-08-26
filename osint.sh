@@ -82,16 +82,13 @@ count_items() {
     fi
 }
 
-echo -e "${CYAN}[+] Searching for repositories that clearly belong to $DOMAIN${NC}"
 search_github "repositories" "$DOMAIN" | jq . > "$RESULTS_DIR/domain_repositories_response.json"
 repos_count=$(count_items "$RESULTS_DIR/domain_repositories_response.json")
-echo -e "${GREEN}[+] Found $repos_count repositories mentioning $DOMAIN${NC}"
 
 jq -r '.items[].owner.login' "$RESULTS_DIR/domain_repositories_response.json" 2>/dev/null | sort -u > "$RESULTS_DIR/potential_orgs_from_repos.txt"
 
 search_github "users" "type:org $DOMAIN in:blog" | jq . > "$RESULTS_DIR/orgs_with_domain_in_blog.json"
 orgs_blog_count=$(count_items "$RESULTS_DIR/orgs_with_domain_in_blog.json")
-echo -e "${GREEN}[+] Found $orgs_blog_count organizations with $DOMAIN in their blog${NC}"
 
 jq -r '.items[].login' "$RESULTS_DIR/orgs_with_domain_in_blog.json" 2>/dev/null >> "$RESULTS_DIR/potential_orgs_from_repos.txt"
 
