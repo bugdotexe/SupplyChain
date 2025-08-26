@@ -190,86 +190,8 @@ if [ -z "$CONFIRMED_ORG" ] && [ -n "$BEST_MATCH" ] && [ $BEST_MATCH_SCORE -gt 0 
     echo "$org_result" | jq . > "$RESULTS_DIR/organization.json"
 fi
 
-# 7. Search for users with company matching the domain
 echo -e "${CYAN}[+] Searching for users associated with $DOMAIN${NC}"
 search_github "users" "$DOMAIN" | jq . > "$RESULTS_DIR/users_response.json"
 users_count=$(count_items "$RESULTS_DIR/users_response.json")
 echo -e "${GREEN}[+] Found $users_count users${NC}"
 
-# 8. Search for code containing the domain
-echo -e "${CYAN}[+] Searching for code containing $DOMAIN${NC}"
-search_github "code" "$DOMAIN" | jq . > "$RESULTS_DIR/code_mentions_response.json"
-code_count=$(count_items "$RESULTS_DIR/code_mentions_response.json")
-echo -e "${GREEN}[+] Found $code_count code mentions${NC}"
-
-# 9. Search for employees mentioning the domain in their profiles
-echo -e "${CYAN}[+] Searching for users with $DOMAIN in their profile${NC}"
-search_github "users" "in:email $DOMAIN" | jq . > "$RESULTS_DIR/email_users_response.json"
-search_github "users" "in:bio $DOMAIN" | jq . > "$RESULTS_DIR/bio_users_response.json"
-email_users_count=$(count_items "$RESULTS_DIR/email_users_response.json")
-bio_users_count=$(count_items "$RESULTS_DIR/bio_users_response.json")
-echo -e "${GREEN}[+] Found $email_users_count users with email from $DOMAIN${NC}"
-echo -e "${GREEN}[+] Found $bio_users_count users with $DOMAIN in bio${NC}"
-
-# 10. Search for commits containing the domain
-echo -e "${CYAN}[+] Searching for commits mentioning $DOMAIN${NC}"
-search_github "commits" "$DOMAIN" | jq . > "$RESULTS_DIR/commits_response.json"
-commits_count=$(count_items "$RESULTS_DIR/commits_response.json")
-echo -e "${GREEN}[+] Found $commits_count commits${NC}"
-
-# Extract just the items from responses for easier processing
-jq '.items' "$RESULTS_DIR/users_response.json" > "$RESULTS_DIR/users.json" 2>/dev/null
-jq '.items' "$RESULTS_DIR/domain_repositories_response.json" > "$RESULTS_DIR/domain_repositories.json" 2>/dev/null
-jq '.items' "$RESULTS_DIR/code_mentions_response.json" > "$RESULTS_DIR/code_mentions.json" 2>/dev/null
-jq '.items' "$RESULTS_DIR/email_users_response.json" > "$RESULTS_DIR/email_users.json" 2>/dev/null
-jq '.items' "$RESULTS_DIR/bio_users_response.json" > "$RESULTS_DIR/bio_users.json" 2>/dev/null
-jq '.items' "$RESULTS_DIR/commits_response.json" > "$RESULTS_DIR/commits.json" 2>/dev/null
-
-# 11. Generate summary report
-echo -e "${CYAN}[+] Generating summary report${NC}"
-{
-    echo "GitHub OSINT Report for $DOMAIN"
-    echo "Generated on: $(date)"
-    echo ""
-    echo "Organization:"
-    if [ -n "$CONFIRMED_ORG" ]; then
-        echo "  Name: $CONFIRMED_ORG"
-        echo "  URL: $(jq -r '.html_url' "$RESULTS_DIR/organization.json" 2>/dev/null || echo "Unknown")"
-        echo "  Repositories: $org_repos_count"
-    else
-        echo "  Not found directly"
-        echo "  Repositories mentioning domain: $repos_count"
-        echo "  Orgs with $DOMAIN in blog: $orgs_blog_count"
-    fi
-    echo ""
-    echo "Users associated with domain: $users_count"
-    echo "Repositories mentioning domain: $repos_count"
-    echo "Code mentions: $code_count"
-    echo "Users with domain in email: $email_users_count"
-    echo "Users with domain in bio: $bio_users_count"
-    echo "Commits mentioning domain: $commits_count"
-    echo ""
-    echo "Potential organizations:"
-    if [ -f "$RESULTS_DIR/potential_orgs.txt" ]; then
-        cat "$RESULTS_DIR/potential_orgs.txt" | while read line; do
-            echo "  $line"
-        done
-    else
-        echo "  None found"
-    fi
-} > "$RESULTS_DIR/summary.txt"
-
-echo -e "${GREEN}[+] OSINT complete! Results saved in $RESULTS_DIR/${NC}"
-echo -e "${GREEN}[+] Review the files for potential sensitive information${NC}"
-
-# Display a quick summary
-echo -e "\n${CYAN}=== QUICK SUMMARY ===${NC}"
-if [ -n "$CONFIRMED_ORG" ]; then
-    echo -e "${GREEN}Organization: $CONFIRMED_ORG${NC}"
-else
-    echo -e "${YELLOW}Organization: Not directly found${NC}"
-fi
-echo -e "${GREEN}Repositories: $repos_count${NC}"
-echo -e "${GREEN}Code mentions: $code_count${NC}"
-echo -e "${GREEN}Users: $users_count${NC}"
-echo -e "${GREEN}Commits: $commits_count${NC}"
