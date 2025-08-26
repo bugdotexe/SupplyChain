@@ -50,7 +50,7 @@ while IFS= read -r REPO; do
     echo -e "\e[31m📦\e[0m Processing $REPO"
     BRANCH=$(gh repo view "$REPO" --json defaultBranchRef --jq '.defaultBranchRef.name')
 
-    for FILE in "package.json" "package-lock.json" "Pipfile" "pyproject.toml" "poetry.lock" "Pipfile.lock" "requirements.txt" "Gemfile" "*.gemspec" "Gemfile.lock" "pom.xml" "setting.xml" "docker-compose.yml"; do
+    for FILE in "package.json" "package-lock.json" "Pipfile" "pyproject.toml" "poetry.lock" "Pipfile.lock" "requirements.txt" "Gemfile" "*.gemspec" "Gemfile.lock" "pom.xml" "setting.xml" "docker-compose.yml" "docker-*.yml"; do
         EXT="${FILE##*.}"
         [[ "$FILE" == "Gemfile" || "$FILE" == "*.gemspec" || "$FILE" == "Gemfile.lock" ]] && EXT="rb"
         [[ "$FILE" == "Pipfile" || "$FILE" == "pyproject.toml" || "$FILE" == "poetry.lock" || "$FILE" == "Pipfile.lock" ]] && EXT="txt"
