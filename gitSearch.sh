@@ -4,30 +4,24 @@
 ORG="${1:-}"
 [ -z "$ORG" ] && { echo "Usage: $0 <organization>"; exit 1; }
 
-OUTPUT_DIR="output/${ORG}_supplyChain"
+OUTPUT_DIR="$ORG"
 mkdir -p "$OUTPUT_DIR"
-
-declare -A COUNTERS
-COUNTERS["json"]=1
-COUNTERS["txt"]=1
-COUNTERS["rb"]=1
-COUNTERS["xml"]=1
-COUNTERS["yml"]=1
-COUNTERS["js"]=1
 
 echo -e "\e[33m🔍\e[0m Searching \e[31m$ORG\e[0m repositories..."
 REPO_LIST=$(gh search repos --owner "$ORG" --json name,owner --jq '.[] | .owner.login + "/" + .name' --limit 1000)
 
-next_available_filename() {
-    local ext=$1
-    while :; do
-        local filename=$(printf "%s%04d.%s" "$ext" "${COUNTERS[$ext]}" "$ext")
-        if [[ ! -e "$OUTPUT_DIR/$filename" ]]; then
-            echo "$filename"
-            return
-        fi
-        ((COUNTERS[$ext]++))
-    done
+make_safe_filename() {
+    local repo="$1"
+    local branch="$2"
+    local path="$3"
+    local ext="$4"
+
+    # Replace / with _
+    local safe_repo=$(echo "$repo" | tr '/:' '_')
+    local safe_path=$(echo "$path" | tr '/:' '_')
+    local safe_branch=$(echo "$branch" | tr '/:' '_')
+
+    echo "${safe_repo}_${safe_branch}_${safe_path}.${ext}"
 }
 
 download_file() {
@@ -37,13 +31,17 @@ download_file() {
     local ext="$4"
 
     local filename
-    filename=$(next_available_filename "$ext")
+    filename=$(make_safe_filename "$repo" "$branch" "$path" "$ext")
+
+
+    if [[ -e "$OUTPUT_DIR/$filename" ]]; then
+        filename="${filename%.*}_$(date +%s%N).$ext"
+    fi
 
     gh api "repos/$repo/contents/$path?ref=$branch" --jq '.content' 2>/dev/null | \
         base64 --decode > "$OUTPUT_DIR/$filename"
 
-    echo -e "\e[32m✅ \e[0m$path →  $filename "
-    ((COUNTERS[$ext]++))
+    echo -e "\e[32m✅ \e[0m$path → $filename "
 }
 
 while IFS= read -r REPO; do
@@ -68,7 +66,6 @@ while IFS= read -r REPO; do
             download_file "$REPO" "$BRANCH" "$NESTED_PATH" "$EXT"
         fi
 
-    
         if [[ "$EXT" == "js" ]]; then
             download_file "$REPO" "$BRANCH" "$NESTED_PATH" "js"
         fi
@@ -82,4 +79,3 @@ echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "rb" | wc -l)\e[0m Gemf
 echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "xml" | wc -l)\e[0m Maven files"
 echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "yml" | wc -l)\e[0m Docker files"
 echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "js" | wc -l)\e[0m JS files"
-echo
