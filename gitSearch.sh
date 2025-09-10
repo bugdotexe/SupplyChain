@@ -4,12 +4,13 @@
 ORG="${1:-}"
 [ -z "$ORG" ] && { echo "Usage: $0 <organization>"; exit 1; }
 
-OUTPUT_DIR="$ORG"
+OUTPUT_DIR="GITHUB/$ORG/$DOMAIN"
 mkdir -p "$OUTPUT_DIR"
 
-echo -e "\e[33m🔍\e[0m Searching \e[31m$ORG\e[0m repositories..."
+echo -e "\e[33mðŸ”\e[0m Searching \e[31m$ORG\e[0m repositories..."
 REPO_LIST=$(gh search repos --owner "$ORG" --json name,owner --jq '.[] | .owner.login + "/" + .name' --limit 1000)
 
+# Create a safe unique filename from repo + branch + path
 make_safe_filename() {
     local repo="$1"
     local branch="$2"
@@ -33,7 +34,7 @@ download_file() {
     local filename
     filename=$(make_safe_filename "$repo" "$branch" "$path" "$ext")
 
-
+    # If somehow the filename exists, add timestamp suffix
     if [[ -e "$OUTPUT_DIR/$filename" ]]; then
         filename="${filename%.*}_$(date +%s%N).$ext"
     fi
@@ -41,11 +42,11 @@ download_file() {
     gh api "repos/$repo/contents/$path?ref=$branch" --jq '.content' 2>/dev/null | \
         base64 --decode > "$OUTPUT_DIR/$filename"
 
-    echo -e "\e[32m✅ \e[0m$path → $filename "
+    echo -e "\e[32mâœ… \e[0m$path â†’ $filename "
 }
 
 while IFS= read -r REPO; do
-    echo -e "\e[31m📦\e[0m Processing $REPO"
+    echo -e "\e[31mðŸ“¦\e[0m Processing $REPO"
     BRANCH=$(gh repo view "$REPO" --json defaultBranchRef --jq '.defaultBranchRef.name')
 
     for FILE in "package.json" "package-lock.json" "Pipfile" "pyproject.toml" "poetry.lock" "Pipfile.lock" "requirements.txt" "Gemfile" "*.gemspec" "Gemfile.lock" "pom.xml" "setting.xml" "docker-compose.yml" "docker-*.yml"; do
@@ -73,9 +74,9 @@ while IFS= read -r REPO; do
 
 done <<< "$REPO_LIST"
 
-echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "json" | wc -l)\e[0m package.json"
-echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "txt" | wc -l)\e[0m requirements.txt"
-echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "rb" | wc -l)\e[0m Gemfiles"
-echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "xml" | wc -l)\e[0m Maven files"
-echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "yml" | wc -l)\e[0m Docker files"
-echo -e "✨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "js" | wc -l)\e[0m JS files"
+echo -e "âœ¨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "json" | wc -l)\e[0m package.json"
+echo -e "âœ¨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "txt" | wc -l)\e[0m requirements.txt"
+echo -e "âœ¨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "rb" | wc -l)\e[0m Gemfiles"
+echo -e "âœ¨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "xml" | wc -l)\e[0m Maven files"
+echo -e "âœ¨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "yml" | wc -l)\e[0m Docker files"
+echo -e "âœ¨ Downloaded : \e[32m$(ls $OUTPUT_DIR/ | grep "js" | wc -l)\e[0m JS files"
