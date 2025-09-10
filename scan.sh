@@ -19,23 +19,31 @@ fi
 
 DOMAIN="$1"
 ORG="$2"
+
+OUTPUT="GITHUB/$ORG"
+mkdir -p "$OUTPUT"
+
 bash find_employees.sh ${DOMAIN} ${ORG}
-EMPLOYEE_FILE="${ORG}_employees.txt"
+EMPLOYEE_FILE="$OUTPUT/${ORG}.employees"
 
 if [[ ! -f "$EMPLOYEE_FILE" ]]; then
     echo -e "\e[31m[!] Employee file not found: $EMPLOYEE_FILE\e[0m"
     exit 1
 fi
 
-OUTPUT_DIR="$ORG"
-mkdir -p "$OUTPUT_DIR"
-
 echo -e "\e[34m[+] Scanning organization: $ORG\e[0m"
 bash gitSearch.sh "$ORG"
-python3 force-push-scanner/force_push_scanner.py --scan --db-file=force-push-scanner/force_push_commits.sqlite3 $ORG
+python3 force_push_scanner.py --scan --db-file=force_push_commits.sqlite3 $ORG
+
 
 echo -e "\e[34m[+] Scanning JavaScript Files \e[0m"
-bash JsScan.sh $OUTPUT_DIR/*.js | 
+for file in $(ls GITHUB/$ORG | grep ".js$");do  
+bash JsLeak.sh $OUTPUT/$file
+done
+
+for file in $(ls GITHUB/$ORG | grep ".js$");do   
+bash JsScan.sh $OUTPUT/$file
+done | 
 while read -r package; do
   if npm view "$package" >/dev/null 2>&1; then
   sleep 0.1
@@ -44,26 +52,27 @@ while read -r package; do
   fi
 done
 
-if ls "$OUTPUT_DIR"/*.yml >/dev/null 2>&1; then
 echo -e "\e[32m\n[+] Extracting Docker images from docker-compose.yml \e[0m"
-grep -h "image:" "$OUTPUT_DIR"/*.yml 2>/dev/null | awk '{print $2}' | cut -d ":" | sort -u | while read -r IMAGE; do
+grep -h "image:" "$OUTPUT"/*.yml 2>/dev/null | awk '{print $2}' | cut -d ":" | sort -u | while read -r IMAGE; do
     if [[ -n "$IMAGE" ]]; then
         bash docker.sh "$IMAGE"
     fi
 done
-else
-echo
-fi
-
 
 while IFS= read -r user; do
     [[ -z "$user" ]] && continue
     
     echo -e "\e[32m[+] Scanning user: $user\e[0m"
     bash gitSearch.sh "$user"
-    python3 force-push-scanner/force_push_scanner.py --scan --db-file=force-push-scanner/force_push_commits.sqlite3 $user
+    python3 force_push_scanner.py --scan --db-file=force_push_commits.sqlite3 $user
     echo -e "\e[34m[+] Scanning JavaScript Files \e[0m"
-       bash JsScan.sh $user/*.js | while read -r package; do
+       for file in $(ls GITHUB/$user | grep ".js$");do  
+          bash JsLeak.sh GITHUB/$user/$file
+       done
+
+       for file in $(ls GITHUB/$user | grep ".js$");do
+         bash JsScan.sh GITHUB/$user/$file
+       done | while read -r package; do
        if npm view "$package" >/dev/null 2>&1; then
          sleep 0.1
        else
@@ -71,17 +80,12 @@ while IFS= read -r user; do
        fi
        done
 
-
-if ls "$user"/*.yml >/dev/null 2>&1; then
 echo -e "\e[32m\n[+] Extracting Docker images from docker-compose.yml \e[0m"
-grep -h "image:" "$user"/*.yml 2>/dev/null | awk '{print $2}' | cut -d ":" | sort -u | while read -r IMAGE; do
+grep -h "image:" "GITHUB/$user"/*.yml 2>/dev/null | awk '{print $2}' | cut -d ":" | sort -u | while read -r IMAGE; do
     if [[ -n "$IMAGE" ]]; then
         bash docker.sh "$IMAGE"
     fi
 done
-else
-echo
-fi
 
 done < "$EMPLOYEE_FILE"
 
@@ -93,7 +97,7 @@ ext=(
     "rb:Ruby Dependencies"
 )
 
-for entry in "$OUTPUT_DIR" $(cat "$EMPLOYEE_FILE"); do
+for entry in "$OUTPUT" $(cat "$EMPLOYEE_FILE"); do
     [ ! -d "$entry" ] && continue
     
     echo -e "\e[34m[+] Running dependency checks for $entry\e[0m"
@@ -106,7 +110,7 @@ for entry in "$OUTPUT_DIR" $(cat "$EMPLOYEE_FILE"); do
         
         while IFS= read -r -d '' file; do
             filename=$(basename "$file")
-            echo -e "\e[33m[→] Processing $filename\e[0m"
+            echo -e "\e[33m[â†’] Processing $filename\e[0m"
             
             case "$ext_type" in
                 "json") bash depChecker.sh --npm "$file" ;;
