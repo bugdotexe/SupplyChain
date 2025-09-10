@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-HUNTER_API_KEY=""
+HUNTER_API_KEY="eecaf22699bf4895331d3ef88ed58a1b04e898771337"
+GITHUB_TOKEN=github_pat_11BVL74EY0RYypJOvd2cpO_z5O8dftv
 USER_AGENT_FILE=""
 USE_PROXY=0
 
@@ -12,7 +13,9 @@ fi
 
 DOMAIN=$1
 ORG=$2
+OUTPUT="GITHUB/$ORG"
 
+mkdir -p "$OUTPUT"
 RED=$(tput setaf 1)
 GREEN=$(tput setaf 2)
 YELLOW=$(tput setaf 3)
@@ -60,24 +63,24 @@ make_api_request() {
 
 collect_emails() {
     echo -e "${YELLOW}[*] Searching emails for $DOMAIN...${NC}"
-    > "${ORG}.emails"
+    > "$OUTPUT/${ORG}.emails"
 
     response=$(make_api_request "https://api.ful.io/email-search-website" "domain_url" "$DOMAIN")
     results=$(echo "$response" | jq -c '.results_found[]?')
     while IFS= read -r result; do
         email=$(echo "$result" | jq -r '.Email')
-        [[ -n "$email" ]] && echo "$email" >> "${ORG}.emails"
-        echo -e "${CYAN}↳ $email${NC}"
+        [[ -n "$email" ]] && echo "$email" >> "$OUTPUT/${ORG}.emails"
+        echo -e "${CYAN}â†³ $email${NC}"
     done <<< "$results"
 
     curl -s "https://api.hunter.io/v2/domain-search?domain=${DOMAIN}&api_key=${HUNTER_API_KEY}" |
         jq -r '.data.emails[].value' |
-        tee -a "${ORG}.emails" |
+        tee -a "$OUTPUT/${ORG}.emails" |
         while IFS= read -r email; do
-            echo -e "${CYAN}↳ $email${NC}"
+            echo -e "${CYAN}â†³ $email${NC}"
         done
 
-    sort -u "${ORG}.emails" -o "${ORG}.emails"
+    sort -u "$OUTPUT/${ORG}.emails" -o "$OUTPUT/${ORG}.emails"
 }
 
 # GitHub API helper with robust header handling
@@ -112,7 +115,7 @@ github_api_request() {
                 if [[ $wait_seconds -lt 0 ]]; then
                     wait_seconds=10
                 fi
-                echo -e "${RED}✗ GitHub rate limit exceeded. Waiting ${wait_seconds} seconds...${NC}" >&2
+                echo -e "${RED}âœ— GitHub rate limit exceeded. Waiting ${wait_seconds} seconds...${NC}" >&2
                 sleep "$wait_seconds"
                 retry_count=$((retry_count + 1))
                 rm -f "$headers"
@@ -122,9 +125,9 @@ github_api_request() {
         
         # Handle other errors
         if [[ "$http_status" == "403" ]]; then
-            echo -e "${RED}✗ GitHub rate limit exceeded. Retrying in ${retry_delay} seconds...${NC}" >&2
+            echo -e "${RED}âœ— GitHub rate limit exceeded. Retrying in ${retry_delay} seconds...${NC}" >&2
         else
-            echo -e "${RED}✗ GitHub API error: HTTP ${http_status}${NC}" >&2
+            echo -e "${RED}âœ— GitHub API error: HTTP ${http_status}${NC}" >&2
         fi
         
         sleep "$retry_delay"
@@ -133,7 +136,7 @@ github_api_request() {
         rm -f "$headers"
     done
 
-    echo -e "${RED}✗ Failed after ${max_retries} retries for ${url}${NC}" >&2
+    echo -e "${RED}âœ— Failed after ${max_retries} retries for ${url}${NC}" >&2
     rm -f "$headers"
     return 1
 }
@@ -141,13 +144,13 @@ github_api_request() {
 fetch_org_members() {
     echo -e "${YELLOW}[*] Fetching GitHub org members for $ORG...${NC}"
     local page=1
-    > "${ORG}_employees.txt"
+    > "$OUTPUT/${ORG}.employees"
 
     while :; do
         response=$(github_api_request "https://api.github.com/orgs/${ORG}/members?per_page=100&page=${page}")
         [[ -z "$response" ]] && break
         
-        echo "$response" | jq -r '.[].login' >> "${ORG}_employees.txt"
+        echo "$response" | jq -r '.[].login' >> "$OUTPUT/${ORG}.employees"
         
         # Check for next page using headers
         next_url=$(curl -sI -H "Authorization: token $GITHUB_TOKEN" \
@@ -167,15 +170,15 @@ search_by_email() {
     while IFS= read -r email; do
         [[ -z "$email" ]] && continue
         github_api_request "https://api.github.com/search/users?q=${email}" |
-            jq -r '.items[].login' >> "${ORG}_employees.txt"
+            jq -r '.items[].login' >> "$OUTPUT/${ORG}.employees"
         sleep 1
-    done < "${ORG}.emails"
+    done < "$OUTPUT/${ORG}.emails"
 }
 
 validate_users() {
     echo -e "${YELLOW}[*] Validating GitHub usernames...${NC}"
-    local input_file="${ORG}_employees.txt"
-    local output_file="${ORG}_valid_employees.txt"
+    local input_file="$OUTPUT/${ORG}.employees"
+    local output_file="$OUTPUT/${ORG}-employees.valid"
     > "$output_file"
     sort -u "$input_file" -o "$input_file"
     sed -i '/^$/d' "$input_file"
@@ -183,7 +186,7 @@ validate_users() {
     while IFS= read -r username; do
         [[ -z "$username" ]] && continue
         if ! [[ "$username" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]]; then
-            echo -e "${RED}✗ INVALID: '$username' (format)${NC}"
+            echo -e "${RED}âœ— INVALID: '$username' (format)${NC}"
             continue
         fi
 
@@ -192,20 +195,20 @@ validate_users() {
             "https://api.github.com/users/$username") || true
 
         if [[ "$http_status" -ne 200 ]]; then
-            echo -e "${RED}✗ INVALID: '$username' (not found)${NC}"
+            echo -e "${RED}âœ— INVALID: '$username' (not found)${NC}"
             continue
         fi
 
         if curl -sfS -H "Authorization: token $GITHUB_TOKEN" \
             "https://api.github.com/orgs/${ORG}/members/${username}" > /dev/null; then
             echo "$username" >> "$output_file"
-            echo -e "${GREEN}✓ VALID: $username${NC}"
+            echo -e "${GREEN}âœ“ VALID: $username${NC}"
         else
             echo -e "${YELLOW}- Valid GitHub user but not in $ORG: $username${NC}"
         fi
     done < "$input_file"
 
-    echo -e "${GREEN}[*] Validation done. Results saved in: ${ORG}_valid_employees.txt${NC}"
+    echo -e "${GREEN}[*] Validation done. Results saved in: $OUTPUT/${ORG}-employees.valid${NC}"
 }
 
 main() {
