@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -29,8 +28,8 @@ Options:
 USAGE
 }
 
-# Defaults
-OUTPUT_DIR="scanned_repos"
+
+OUTPUT_DIR="GITHUB"
 REGEX_JSON="regex.json"
 MODE="both"
 INCLUDE_ARCHIVED=0
@@ -40,7 +39,6 @@ TIMEOUT=12
 ORG=""
 USER=""
 
-# Parse arguments
 if [[ $# -eq 0 ]]; then
   usage
   exit 1
@@ -73,12 +71,11 @@ if [[ ! -f "$REGEX_JSON" ]]; then
   exit 1
 fi
 
-# If token provided, export for gh to use
+
 if [[ -n "${TOKEN:-}" ]]; then
-  export GITHUB_TOKEN="$TOKEN"
+  export GITHUB_TOKEN="$GITHUB_TOKEN"
 fi
 
-# Step 1: Fetch repos via gh api (paginated)
 REPOS_LIST_FILE="repos.list.$(date +%s).txt"
 > "$REPOS_LIST_FILE"
 
@@ -96,7 +93,7 @@ if [[ ! -s "$REPOS_LIST_FILE" ]]; then
   exit 0
 fi
 
-# Step 2: Clone repos (serial)
+
 OUTPUT_DIR_ABS="$(realpath "$OUTPUT_DIR")"
 mkdir -p "$OUTPUT_DIR_ABS"
 
@@ -127,16 +124,14 @@ else
   echo -e "${YELLOW}Skipping cloning as per --skip-clone.${NC}"
 fi
 
-# Step 3: Scan repos for URLs and secrets
-echo -e "${BLUE}Scanning downloaded repos for URLs and secrets...${NC}"
 
-# Load secret patterns from regex.json (PCRE)
+echo -e "${BLUE}[-] Scanning downloaded repos for URLs and secrets...${NC}"
+
 declare -a SECRET_PATTERNS
 while IFS=$'\t' read -r key value; do
   SECRET_PATTERNS+=("$key|$value")
 done < <(jq -r 'to_entries[] | "\(.key)\t\(.value)"' "$REGEX_JSON")
 
-# URL regex for GitHub links
 GH_URL_REGEX='https?://github\.com/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?'
 
 TOTAL_URLS=0
@@ -144,7 +139,6 @@ TOTAL_BROKEN=0
 TOTAL_GOOD=0
 TOTAL_SECRETS=0
 
-# Ensure clipboard-free cleanup file
 URLS_TMP="/tmp/gh_scanner_urls_$RANDOM.txt"
 
 for repo_dir in "$OUTPUT_DIR_ABS"/*; do
@@ -153,7 +147,6 @@ for repo_dir in "$OUTPUT_DIR_ABS"/*; do
     continue
   fi
 
-  # 1) Secrets (PCRE with grep -P if available)
   if [[ "$MODE" == "secrets" || "$MODE" == "both" ]]; then
     for pat in "${SECRET_PATTERNS[@]}"; do
       if [[ -n "$pat" ]]; then
@@ -172,15 +165,15 @@ for repo_dir in "$OUTPUT_DIR_ABS"/*; do
     done
   fi
 
-  # 2) URLs (serial)
+
   if [[ "$MODE" == "urls" || "$MODE" == "both" ]]; then
-    # Collect URLs from text files (avoid binaries)
+  
     find "$repo_dir" -type f -print0 2>/dev/null | while IFS= read -r -d '' f; do
       mime=$(file -b --mime-type "$f" 2>/dev/null || echo "application/octet-stream")
       if [[ "$mime" != text/* && "$mime" != "message/*" ]]; then
         continue
       fi
-      # Extract GitHub URLs from this file
+  
       if grep -P -q "$GH_URL_REGEX" "$f" 2>/dev/null; then
         urls_in_file=$(grep -P -o -h "$GH_URL_REGEX" "$f" 2>/dev/null || true)
         if [[ -n "$urls_in_file" ]]; then
