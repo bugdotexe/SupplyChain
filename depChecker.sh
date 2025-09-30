@@ -6,7 +6,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 NAME=$1
-OUTPUT=$2
+OUT_PUT=$2
 
 echo -e "${BLUE}Checking NPM Dependencies $NAME ${NC}"
 while IFS= read -r pkg; do
