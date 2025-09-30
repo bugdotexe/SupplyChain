@@ -9,7 +9,7 @@ NAME=$1
 REPOS=$2
 
 echo -e "${BLUE}Fetching docker images from $NAME ${NC}"
-grep -roh -E "docker (pull|run|push) [-a-zA-Z0-9_]+/[-a-zA-Z0-9_]+" $REPOS | awk -F " " '{print $3}' | awk -F "/" '{print $1}' | sort | uniq | anew $REPOS/image.docker
+grep -roh -E "docker (pull|run|push) [-a-zA-Z0-9_]+/[-a-zA-Z0-9_]+" $REPOS | awk -F " " '{print $3}' | awk -F "/" '{print $1}' | sort | uniq | anew $REPOS/../image.docker
 find $REPOS -name docker-compose.yml | xargs -I {} awk '{print}' {} | grep "image:" \
   | grep -v "^\s*#" \
   | sed -E 's/^[[:space:]]*image:[[:space:]]*"?([^" ]+)"?/\1/' \
