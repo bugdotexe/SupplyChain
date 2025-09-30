@@ -18,17 +18,19 @@ if [[ $# -lt 1 ]]; then
 fi
 ORG=$1
 
+LOWER=$(echo "${ORG}" | tr '[:upper:]' '[:lower:]')
 bash ghClone.sh $ORG
-bash main.sh $ORG "/tmp/$ORG/REPOS"
-bash depChecker.sh $ORG "/tmp/$ORG/"
-trufflehog github --only-verified --token=$GITHUB_TOKEN --issue-comments --pr-comments --gist-comments --include-members --archive-max-depth=50 --org=$ORG
+bash main.sh $ORG "/tmp/$ORG/REPOS/${LOWER}"
+bash depChecker.sh $ORG "/tmp/$ORG"
+trufflehog github --only-verified --token=$GITHUB_TOKEN --issue-comments --pr-comments --gist-comments --include-members --archive-max-depth=150 --org=$ORG
 
 while IFS= read -r member; do
 bash main.sh ${member} "/tmp/$ORG/${member}/"
-bash depChecker.sh ${member} "/tmp/$ORG/${member}/"
+bash depChecker.sh ${member} "/tmp/$ORG/${member}"
 
-for f in "/tmp/$ORG/${member}/REPOS/*"; do
+LOWER=$(echo "${member}" | tr '[:upper:]' '[:lower:]')
+for f in "/tmp/$ORG/${member}/REPOS/${LOWER}/*"; do
   [ -e "$f" ] || continue
-  trufflehog git file://"/tmp/$ORG/${member}/REPOS/${f##*/}" --only-verified --archive-max-depth=150
+  trufflehog git file://"/tmp/$ORG/${member}/REPOS/${LOWER}/${f##*/}" --only-verified --archive-max-depth=150
 done
 done < "/tmp/$ORG/member.usernames"
