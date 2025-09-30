@@ -1,178 +1,41 @@
 #!/bin/bash
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-set -e
+NAME=$1
+OUTPUT=$2
 
-show_help() {
-    echo "Usage: $0 [--npm <package.json>] [--pip <requirements.txt>] [--gem <Gemfile>] [--all]"
-    echo ""
-    echo "Options:"
-    echo "  --npm <file>         Check dependencies in npm package.json"
-    echo "  --pip <file>         Check dependencies in pip requirements.txt"
-    echo "  --gem <file>         Check dependencies in Ruby Gemfile"
-    echo "  -h, --help           Show this help message"
-    exit 1
-}
+echo -e "${BLUE}Checking NPM Dependencies $NAME ${NC}"
+while IFS= read -r pkg; do
+if npm view "$pkg" >/dev/null 2>&1; then
+    echo -e "${BLUE}[NPM]${NC} ${BLUE}$pkg${NC} ${BLUE}[AVAILABLE]${NC}"
+    echo "${pkg}" | anew $OUT_PUT/npm.potential >/dev/null 2>&1
+  fi
+done < "$OUT_PUT/npm.deps" | sed 's/[[:space:]]//g' | awk '{print $1}'
 
-command -v jq >/dev/null || { echo "jq required, please install it."; exit 1; }
 
-check_npm_deps() {
-    local file="$1"
-    jq -r '
-        def extract_deps:
-            [.dependencies? // {}, .devDependencies? // {}, .peerDependencies? // {}]
-            | add // {}
-            | keys[];
+echo -e "${BLUE}Checking Python Dependencies $NAME ${NC}"
+while IFS= read -r pkg; do
+if pip show "$pkg" >/dev/null 2>&1; then
+    echo -e "${BLUE}[PIP]${NC} ${BLUE}$pkg${NC} ${BLUE}[AVAILABLE]${NC}"
+echo "${pkg}" | anew $OUT_PUT/pip.potential >/dev/null 2>&1
+  fi
+done < "$OUT_PUT/pip.deps" | sed 's/[[:space:]]//g' | awk '{print $1}'
 
-        if has("lockfileVersion") then
-            if .lockfileVersion >= 3 then
-                # For lockfileVersion 3: extract from all packages
-                .packages | to_entries[] | .value | extract_deps
-            else
-                # For older lockfile versions: extract from dependencies
-                .dependencies | keys[]
-            end
-        else
-            # For package.json
-            extract_deps
-        end
-    ' "$file" | sort -u |
-    while read -r pkg; do
-        if npm view "$pkg" &>/dev/null; then
-            continue
-        else
-            echo -e "\e[32m [+]\e[0m \e[31m$pkg\e[0m does NOT exist on NPM\e[0m"
-        fi
-    done
-}
 
-extract_deps() {
-  awk '
-    BEGIN {
-      in_deps = 0
-      in_build = 0
-      in_project = 0
-    }
 
-    # Section headers
-    /\[.*\.dependencies\]/ || /\[dependencies\]/ {
-      in_deps = 1; in_build = 0; in_project = 0; next
-    }
-    /\[build-system\]/ {
-      in_build = 1; in_deps = 0; in_project = 0; next
-    }
-    /\[project\]/ {
-      in_project = 1; in_deps = 0; in_build = 0; next
-    }
-    /^\[/ {
-      in_deps = 0; in_build = 0; in_project = 0
-    }
+echo -e "${BLUE}Checking Ruby Gem Dependencies $NAME ${NC}"
+while IFS= read -r pkg; do
 
-    # Dependency sections
-    in_deps && /^[^#=]+[ \t]*=/ {
-      pkg = $0
-      sub(/[ \t]*=.*/, "", pkg)
-      gsub(/^[ \t"'\'']+|[ \t"'\'']+$/, "", pkg)
-      if (pkg != "python") print pkg
-    }
+if gem info "$pkg" >/dev/null 2>&1; then
+    echo -e "${BLUE}[GEM]${NC} ${BLUE}$pkg${NC} ${BLUE}[AVAILABLE]${NC}"
+   echo "${pkg}" | anew $OUT_PUT/ruby.potential >/dev/null 2>&1
+ fi
+done < "$OUT_PUT/ruby.deps" | sed 's/[[:space:]]//g' | awk '{print $1}'
 
-    # Build-system requires
-    in_build && /requires[ \t]*=[ \t]*\[/ {
-      gsub(/^[^\[]+\[|\].*/, "", $0)
-      split($0, deps, ",")
-      for (i in deps) {
-        gsub(/[ \t"'\''<>=\\!~]/, "", deps[i])
-        if (deps[i] != "") print deps[i]
-      }
-    }
-
-    # Project dependencies
-    in_project && /dependencies[ \t]*=[ \t]*\[/ {
-      gsub(/^[^\[]+\[|\].*/, "", $0)
-      split($0, deps, ",")
-      for (i in deps) {
-        gsub(/^[ \t"'\'']+|[ \t"'\'']$/, "", deps[i])
-        sub(/[<>=!~].*/, "", deps[i])
-        if (deps[i] != "") print deps[i]
-      }
-    }
-
-    # Project optional dependencies
-    in_project && /^[a-zA-Z0-9_-]+[ \t]*=[ \t]*\[/ {
-      gsub(/^[^[]+\[|\].*/, "", $0)
-      split($0, deps, ",")
-      for (i in deps) {
-        gsub(/^[ \t"'\'']+|[ \t"'\'']$/, "", deps[i])
-        sub(/[<>=!~].*/, "", deps[i])
-        if (deps[i] != "") print deps[i]
-      }
-    }
-  ' "$1"
-}
-
-check_pip_reqs() {
-    local file="$1"
-
-    if [[ $(cat $file | grep ".dependencies") ]];then
-       extract_deps $file | sort | uniq |
-    while read -r pkg; do
-        pkg_lc=$(echo "$pkg" | tr '[:upper:]' '[:lower:]')
-        if curl -s -f "https://pypi.org/pypi/${pkg_lc}/json" >/dev/null; then
-            continue
-        else
-             echo -e "\e[32m [+]\e[0m \e[31m$pkg\e[0m does NOT exist on PyPI\e[0m"
-        fi
-    done
-
-   else
-    grep -oP '^[a-zA-Z0-9_\-]+' "$file" | sort | uniq |
-    while read -r pkg; do
-        pkg_lc=$(echo "$pkg" | tr '[:upper:]' '[:lower:]')
-        if curl -s -f "https://pypi.org/pypi/${pkg_lc}/json" >/dev/null; then
-            continue
-        else
-             echo -e "\e[32m [+]\e[0m \e[31m$pkg\e[0m does NOT exist on PyPI\e[0m"
-        fi
-    done
-    fi
-}
-
-check_gemfile() {
-    local file="$1"
-    grep -oP "gem\s+['\"]\K[^'\"]+" "$file" | sort | uniq |
-    while read -r pkg; do
-        pkg_lc=$(echo "$pkg" | tr '[:upper:]' '[:lower:]')
-        if curl -s -f "https://rubygems.org/api/v1/gems/${pkg_lc}.json" >/dev/null; then
-            continue
-        else
-             echo -e "\e[32m [+]\e[0m \e[31m$pkg\e[0m does NOT exist on RubyGem\e[0m"
-        fi
-    done
-}
-
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --npm)
-            npm_file="$2"
-            shift 2
-            ;;
-        --pip)
-            pip_file="$2"
-            shift 2
-            ;;
-        --gem)
-            gem_file="$2"
-            shift 2
-            ;;
-        -h|--help)
-            show_help
-            ;;
-        *)
-            echo "Unknown option: $1"
-            show_help
-            ;;
-    esac
-done
-
-[ -n "$npm_file" ] && check_npm_deps "$npm_file"
-[ -n "$pip_file" ] && check_pip_reqs "$pip_file"
-[ -n "$gem_file" ] && check_gemfile "$gem_file"
+echo -e "${BLUE}Scanning Broken GITHUB link $NAME ${NC}"
+cat $OUT_PUT/github.account | cut -d "/" -f1,2,3,4 | sort | uniq | xargs -I {} sh scan-broken.sh {} | anew $OUT_PUT/github.potential
+#cat $OUT_PUT/github.account | grep -v ajax.googleapis.com\|awscli.amazonaws.com\|docs.aws.amazon.com\|ec2.amazonaws.com\|fonts.googleapis.com\|maps.googleapis.com\|oauth2.googleapis.com\|openidconnect.googleapis.com\|play.googleapis.com\|sns.amazonaws.com\|go-integration-test" | grep "actions-contrib\|googleapis\|amazonaws\|vercel.app\|netlify\|herokuapp\|surge.sh\|now.sh\|plugins.svn.wordpress.org\|npmjs.org\/package"
