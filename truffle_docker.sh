@@ -5,7 +5,7 @@ set -euo pipefail
 # Example: ./scan_namespace.sh mozilla
 
 NAMESPACE="$1"
-OUTDIR="scan_logs_${NAMESPACE}_$(date +%F_%H-%M-%S)"
+OUTDIR="TRUFFLE_${NAMESPACE}"
 mkdir -p "$OUTDIR"
 
 YELLOW='\033[93m'
