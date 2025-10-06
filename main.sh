@@ -56,5 +56,5 @@ grep -roP "(npm.pkg.github.com)/[-a-zA-Z0-9_\.\/]+" $REPOS | anew $REPOS/../gith
 grep -roP "(maven.pkg.github.com)/[-a-zA-Z0-9_\.\/]+" $REPOS | anew $REPOS/../github.reg
 grep -roP "(nuget.pkg.github.com)/[-a-zA-Z0-9_\.\/]+" $REPOS | anew $REPOS/../github.reg
 
-#echo -e "${BLUE}Scanning Javascript files from $NAME ${NC}"
-#find $REPOS -name "*.js" | sort -u | xargs -I {} bash JsLeak.sh {}
+echo -e "${BLUE}Fetching github action from $NAME ${NC}"
+grep -roh -E "uses: [-a-zA-Z0-9\.]+/[-a-zA-Z0-9.]+\@[-a-zA-Z0-9\.]+" $REPOS | awk -F ": " '{print $2}' | awk -F "/" '{print "https://github.com/"$1}' | sort | uniq | grep -v "github.com/actions$" | anew $REPOS/../github.action
