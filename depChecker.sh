@@ -17,7 +17,7 @@ cat "$OUT_PUT/pip.deps" | sed 's/[[:space:]]//g' | awk '{print $1}' | xargs -I {
 cat $OUT_PUT/pip.checked | grep "is available" | anew $OUT_PUT/pip.potential
 
 echo -e "${BLUE}Checking Ruby Gem Dependencies $NAME ${NC}"
-cat "$OUT_PUT/ruby.deps" | xargs -I {} ruby-name {} | anew $OUT_PUT/gem.checked
+cat "$OUT_PUT/ruby.deps" | xargs -I {} sh ruby-name.sh {} | anew $OUT_PUT/gem.checked
 cat $OUT_PUT/gem.checked | grep "is available" | anew $OUT_PUT/gem.potential
 
 broken_github() {
