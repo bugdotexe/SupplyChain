@@ -2,11 +2,12 @@
 
 set -euo pipefail
 
-
+# --- Configuration ---
 ORG_SCOPE="${1:-}"
 API_PAGE_SIZE=250
 REPORT_FILE="npm_audit_report.json"
 
+# --- Functions ---
 
 check_deps() {
   local missing_deps=0
@@ -33,6 +34,7 @@ process_package_version() {
   (
     cd "$temp_dir" || exit 1
 
+    # Try downloading that exact version tarball
     if ! npm pack "$package_name@$version" --quiet &>/dev/null; then
       echo "WARN: Failed to download $package_name@$version"
       return
@@ -74,6 +76,7 @@ process_package() {
   done <<<"$versions"
 }
 
+# --- Main Script Logic ---
 
 check_deps
 
@@ -83,13 +86,16 @@ if [[ -z "$ORG_SCOPE" ]]; then
 fi
 
 echo "INFO: Starting full audit for organization scope: @$ORG_SCOPE"
-echo "[]" >"$REPORT_FILE" 
+echo "[]" >"$REPORT_FILE" # initialize JSON array file
+
+# Fetch all packages in org scope
 curl -s "https://api.npms.io/v2/search?q=scope:$ORG_SCOPE&size=$API_PAGE_SIZE" | \
   jq -r '.results[].package.name' | \
   while read -r package_name; do
     [[ -n "$package_name" ]] && process_package "$package_name"
   done
 
+# Summarize results
 if [[ -s "$REPORT_FILE" ]]; then
   echo "INFO: Secret findings summary:"
   jq '.' "$REPORT_FILE"
