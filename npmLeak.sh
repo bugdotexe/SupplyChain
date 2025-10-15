@@ -1,165 +1,101 @@
 #!/bin/bash
 
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >&2
-}
+set -euo pipefail
 
-fetch_org_packages() {
-    local org_name=$1
-    log "Fetching organization packages for @$org_name"
-        curl -s "https://www.npmjs.com/org/$org_name" \
-            | grep -oP '"name":"@'"$org_name"'/[^"]+"' \
-            | cut -d'"' -f4 | sort -u \
-            > "$SCAN_DIR/package_list.txt" || true
-}
 
-fetch_user_packages() {
-    local user_name=$1
-    log "Fetching user packages for $user_name"
-        curl -s "https://www.npmjs.com/~$user_name" \
-            | grep -oP '"name":"[^"]+"' \
-            | cut -d'"' -f4 \
-            | sort -u \
-            > "$SCAN_DIR/package_list.txt" || true
-}
+ORG_SCOPE="${1:-}"
+API_PAGE_SIZE=250
+REPORT_FILE="npm_audit_report.json"
 
-fetch_versions() {
-    local package=$1
-    log "Fetching versions for $package"
-    curl -s "https://registry.npmjs.org/$package" \
-        | jq -r '.versions | keys[]' \
-        > "$SCAN_DIR/versions.txt"
-}
 
-load_patterns() {
-    local patterns_file=$1
-    if jq -e 'type == "object"' "$patterns_file" >/dev/null 2>&1; then
-        jq -r 'to_entries[] | "\(.key)\t\(.value)"' "$patterns_file" > "$SCAN_DIR/patterns.tsv"
-    elif jq -e 'type == "array"' "$patterns_file" >/dev/null 2>&1; then
-        jq -r '.[] | "\(.name)\t\(.pattern)"' "$patterns_file" > "$SCAN_DIR/patterns.tsv"
-    else
-        log "Error: Invalid patterns file format"
-        exit 1
+check_deps() {
+  local missing_deps=0
+  for dep in npm jq trufflehog curl; do
+    if ! command -v "$dep" &>/dev/null; then
+      echo "ERROR: Required dependency '$dep' is not installed or not in PATH." >&2
+      missing_deps=1
     fi
-}
-
-scan_file() {
-    local file=$1
-    local package=$2
-    local version=$3
-
-    while IFS=$'\t' read -r pattern_name pattern; do
-        if [ -z "$pattern_name" ] || [ -z "$pattern" ]; then
-            continue
-        fi
-        grep -H -n -E -o "$pattern" "$file" 2>/dev/null | while read -r match; do
-            echo "FOUND: $package@$version - $pattern_name - $match"
-        done
-    done < "$SCAN_DIR/patterns.tsv"
-}
-
-scan_package_version() {
-    local package=$1
-    local version=$2
-    local tmp_dir=$(mktemp -d)
-    log "Downloading $package@$version"
-    local tarball_name
-    if [[ "$package" == @* ]]; then
-        tarball_name=$(echo "$package" | sed 's/^@//' | sed 's/\//-/g')
-    else
-        tarball_name="$package"
-    fi
-    local tar_file="$tmp_dir/package.tar.gz"
-    curl -s "https://registry.npmjs.org/$package/-/$tarball_name-$version.tgz" -o "$tar_file"
-    if [ -s "$tar_file" ]; then
-        log "Extracting $package@$version"
-        tar -xzf "$tar_file" -C "$tmp_dir" 2>/dev/null || true
-        log "Scanning $package@$version"
-        find "$tmp_dir" -type f \( -name "*.js" -o -name "*.json" -o -name "*.ts" -o -name "*.txt" \) | while read -r file; do
-            while IFS=$'\t' read -r pattern_name pattern; do
-                if [ -z "$pattern_name" ] || [ -z "$pattern" ]; then
-                    continue
-                fi
-                grep --color=always -H -n -E -o "$pattern" "$file" 2>/dev/null | while read -r match; do
-                    echo "FOUND: $package@$version - $pattern_name - $match"
-                done
-            done < "$SCAN_DIR/patterns.tsv"
-        done
-    else
-        log "Failed to download $package@$version"
-    fi
-    
-    rm -rf "$tmp_dir"
-}
-if [ $# -eq 0 ]; then
-    echo "Usage: $0 --user <username> | --org <orgname> [--patterns <patterns_file>]"
+  done
+  if [[ "$missing_deps" -eq 1 ]]; then
     exit 1
+  fi
+}
+
+process_package_version() {
+  local package_name="$1"
+  local version="$2"
+  local temp_dir
+  temp_dir=$(mktemp -d)
+  trap 'rm -rf -- "$temp_dir"' EXIT
+
+  echo "INFO: Scanning $package_name@$version"
+
+  (
+    cd "$temp_dir" || exit 1
+
+    if ! npm pack "$package_name@$version" --quiet &>/dev/null; then
+      echo "WARN: Failed to download $package_name@$version"
+      return
+    fi
+
+    local tarball
+    tarball=$(find . -name "*.tgz" | head -n 1)
+    tar -xzf "$tarball"
+
+    local package_path="package"
+
+    local scan_output
+    scan_output=$(trufflehog filesystem "$package_path" --only-verified --json || true)
+
+    if [[ -n "$scan_output" ]]; then
+      echo "!!! CRITICAL: Verified secrets found in $package_name@$version !!!"
+      echo "$scan_output" | jq --arg pkg "$package_name" --arg ver "$version" \
+        '. | {package:$pkg, version:$ver, secrets:.}' >>"$REPORT_FILE"
+    else
+      echo "INFO: No verified secrets found in $package_name@$version"
+    fi
+  )
+}
+
+process_package() {
+  local package_name="$1"
+
+  echo "INFO: Fetching all versions of $package_name..."
+  local versions
+  versions=$(npm view "$package_name" versions --json 2>/dev/null | jq -r '.[]' || true)
+
+  if [[ -z "$versions" ]]; then
+    echo "WARN: No versions found for $package_name"
+    return
+  fi
+
+  while read -r version; do
+    [[ -n "$version" ]] && process_package_version "$package_name" "$version"
+  done <<<"$versions"
+}
+
+
+check_deps
+
+if [[ -z "$ORG_SCOPE" ]]; then
+  echo "Usage: $0 <npm_organization_scope>"
+  exit 1
 fi
 
-PATTERNS_FILE="regex.json"
-SCAN_DIR=$(mktemp -d)
-trap 'rm -rf "$SCAN_DIR"' EXIT
+echo "INFO: Starting full audit for organization scope: @$ORG_SCOPE"
+echo "[]" >"$REPORT_FILE" 
+curl -s "https://api.npms.io/v2/search?q=scope:$ORG_SCOPE&size=$API_PAGE_SIZE" | \
+  jq -r '.results[].package.name' | \
+  while read -r package_name; do
+    [[ -n "$package_name" ]] && process_package "$package_name"
+  done
 
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --user)
-            TARGET_TYPE="user"
-            TARGET="$2"
-            shift 2
-            ;;
-        --org)
-            TARGET_TYPE="org"
-            TARGET="$2"
-            shift 2
-            ;;
-        --patterns)
-            PATTERNS_FILE="$2"
-            shift 2
-            ;;
-        *)
-            echo "Unknown option: $1"
-            exit 1
-            ;;
-    esac
-done
-
-if [ -z "$TARGET" ] || [ -z "$TARGET_TYPE" ]; then
-    echo "Must specify either --user or --org with a target name"
-    exit 1
-fi
-
-if [ ! -f "$PATTERNS_FILE" ]; then
-    echo "Patterns file $PATTERNS_FILE not found"
-    exit 1
-fi
-
-load_patterns "$PATTERNS_FILE"
-
-if [ "$TARGET_TYPE" = "org" ]; then
-    fetch_org_packages "$TARGET"
+if [[ -s "$REPORT_FILE" ]]; then
+  echo "INFO: Secret findings summary:"
+  jq '.' "$REPORT_FILE"
 else
-    fetch_user_packages "$TARGET"
+  echo "INFO: No verified secrets found across all packages."
 fi
 
-if [ ! -s "$SCAN_DIR/package_list.txt" ]; then
-    log "No packages found for $TARGET"
-    exit 1
-fi
-
-log "Found $(wc -l < "$SCAN_DIR/package_list.txt") packages"
-
-while read -r package; do
-    if [ -n "$package" ]; then
-        log "Processing package: $package"
-        fetch_versions "$package"
-        if [ ! -s "$SCAN_DIR/versions.txt" ]; then
-            log "No versions found for $package"
-            continue
-        fi
-        while read -r version; do
-            if [ -n "$version" ]; then
-                scan_package_version "$package" "$version"
-            fi
-        done < "$SCAN_DIR/versions.txt"
-    fi
-done < "$SCAN_DIR/package_list.txt"
+echo "INFO: Audit completed for @$ORG_SCOPE"
+echo "Report saved at: $REPORT_FILE"
