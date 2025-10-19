@@ -1,1 +1,3 @@
-Production Environment 
+Our research explores the hidden risks within modern software supply chains, where trust and automation can become points of exploitation. We investigate how dependencies, build systems, containers, and CI/CD pipelines can be manipulated to introduce malicious code or unauthorized access.
+
+By analyzing real-world case studies, dependency confusion scenarios, and misconfigured registries, we aim to identify and mitigate potential compromise paths before they reach production environments. This work bridges offensive insight and defensive strategy, helping developers, DevOps teams, and security engineers strengthen the integrity of every link in the software lifecycle
