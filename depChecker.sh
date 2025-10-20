@@ -27,5 +27,9 @@ cat $OUT_PUT/github.account | cut -d "/" -f1,2,3,4 | sort | uniq | xargs -I {} s
 echo -e "${BLUE}Scanning Broken GITHUB Action $NAME ${NC}"
 cat $OUT_PUT/github.action | cut -d "/" -f1,2,3,4 | sort | uniq | xargs -I {} sh scan-broken.sh {} | anew $OUT_PUT/github.potential
 }
-
 broken_github
+
+echo -e "${BLUE}Scanning Broken docker name $NAME ${NC}"
+cat $OUT_PUT/image.docker | cut -d "/" -f1 |cut -d ":" -f1 | sort -u | xargs -I {} sh docker-name.sh {} | anew $OUT_PUT/docker.potential
+echo -e "${BLUE}Scanning Broken docker name : GHCR : $NAME ${NC}" | notify
+cat $OUT_PUT | cut -d ":" -f2 | cut -d "/" -f2 | sort -u | xargs -I {} sh docker-name.sh {} | anew $OUT_PUT/docker.potential | notify
