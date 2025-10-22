@@ -40,11 +40,7 @@ process_package_version() {
       return
     fi
 
-    local tarball
-    tarball=$(find . -name "*.tgz" | head -n 1)
-    tar -xzf "$tarball"
-
-    local package_path="package"
+    local package_path=$temp_dir
 
     local scan_output
     scan_output=$(trufflehog filesystem "$package_path" --only-verified --json || true)
