@@ -14,7 +14,7 @@ ROOT_DIR="/tmp/$ORG/"
 
 org() {
 echo -e "${BLUE}[-]Cloning Github Repositories [-] :${NC} ${RED}$ORG ${NC}"
-ghorg clone $ORG --fetch-all --quiet -p $OUTPUT_DIR -t $GITHUB_TOKEN --color enabled --skip-forks
+ghorg clone $ORG --fetch-all --quiet -p $OUTPUT_DIR -t $GITHUB_TOKEN --color enabled --skip-forks --skip-archived
 }
 
 member() {
@@ -25,7 +25,7 @@ while IFS= read -r NAME; do
 mkdir -p "$ROOT_DIR/$NAME"
 local OUTPUT_DIR="$ROOT_DIR/$NAME/REPOS"
 echo -e "${BLUE}[-]Cloning Github Repositories [-]:${NC} ${RED}$NAME ${NC}"
-ghorg clone $NAME --clone-type=user --fetch-all --quiet -p $OUTPUT_DIR -t $GITHUB_TOKEN --color enabled --skip-forks
+ghorg clone $NAME --clone-type=user --fetch-all --quiet -p $OUTPUT_DIR -t $GITHUB_TOKEN --color enabled --skip-forks --skip-archived
 done < $ROOT_DIR/member.usernames
 }
 
