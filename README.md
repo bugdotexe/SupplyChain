@@ -4,4 +4,6 @@ By analyzing real-world case studies, dependency confusion scenarios, and miscon
 
 
 ## Usage example :
-`sh scan.sh <GITHUB ORG>`
+```
+bash scan.sh <GITHUB ORG>
+```
