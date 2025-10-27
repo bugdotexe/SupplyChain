@@ -14,6 +14,28 @@ if (process.argv.length < 3) {
 }
 const rootDir = process.argv[2];
 
+// Node.js built-in modules (as of Node.js 18+)
+const NODE_BUILTIN_MODULES = new Set([
+  'assert', 'async_hooks', 'buffer', 'child_process', 'cluster', 'console',
+  'constants', 'crypto', 'dgram', 'diagnostics_channel', 'dns', 'domain',
+  'events', 'fs', 'http', 'http2', 'https', 'inspector', 'module', 'net',
+  'os', 'path', 'perf_hooks', 'process', 'punycode', 'querystring', 'readline',
+  'repl', 'stream', 'string_decoder', 'timers', 'tls', 'trace_events', 'tty',
+  'url', 'util', 'v8', 'vm', 'wasi', 'worker_threads', 'zlib',
+  // Additional modules that might be referenced
+  'sys', 'freelist', 'smalloc', 'sys', '_linklist', '_stream_wrap',
+  // Common aliases
+  'node:assert', 'node:async_hooks', 'node:buffer', 'node:child_process', 
+  'node:cluster', 'node:console', 'node:constants', 'node:crypto', 'node:dgram',
+  'node:diagnostics_channel', 'node:dns', 'node:domain', 'node:events', 'node:fs',
+  'node:http', 'node:http2', 'node:https', 'node:inspector', 'node:module',
+  'node:net', 'node:os', 'node:path', 'node:perf_hooks', 'node:process',
+  'node:punycode', 'node:querystring', 'node:readline', 'node:repl',
+  'node:stream', 'node:string_decoder', 'node:timers', 'node:tls',
+  'node:trace_events', 'node:tty', 'node:url', 'node:util', 'node:v8',
+  'node:vm', 'node:wasi', 'node:worker_threads', 'node:zlib'
+]);
+
 // Store package occurrences with file paths
 const packageOccurrences = new Map();
 
@@ -121,7 +143,8 @@ function isValidPackageName(name) {
       name.startsWith('/') || 
       name.startsWith('@') ||
       name.startsWith('node:') ||
-      name.includes('\\')) { // Windows paths
+      name.includes('\\') || // Windows paths
+      NODE_BUILTIN_MODULES.has(name)) { // Node.js built-in modules
     return false;
   }
   
@@ -130,6 +153,7 @@ function isValidPackageName(name) {
     /^https?:\/\//, // URLs
     /^\.\.?\//,     // Relative paths
     /^[a-z]:/i,     // Windows drive letters
+    /^#/,           // Import maps/package imports (like #some-package)
   ];
   
   return !skipPatterns.some(pattern => pattern.test(name));
