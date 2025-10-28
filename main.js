@@ -129,7 +129,133 @@ function normalizePackageName(packageName) {
     
     // If there's exactly 1 slash, it's likely a deep import (like lodash/map)
     // Extract just the package name part
-    return packageName.split('/')[0];
+ //   return packageName.split('/')[0]; -> 
+//  } ->
+    const firstPart = packageName.split('/')[0];
+    
+    // Filter out obvious local directory names
+    /**
+ * Comprehensive local directory and build artifact patterns
+ */
+const LOCAL_DIRECTORY_PATTERNS = [
+  // Build and output directories
+  'dist', 'build', 'out', 'target', 'bin', 'output', 'release', 'releases',
+  'debug', 'release', 'prod', 'production', 'stage', 'staging', 'dev', 'development',
+  
+  // Source code directories
+  'src', 'source', 'sources', 'lib', 'libs', 'library', 'libraries',
+  'app', 'apps', 'application', 'applications',
+  'web', 'webapp', 'webapps', 'site', 'sites',
+  'client', 'clients', 'frontend', 'frontends', 'ui', 'uis',
+  'server', 'servers', 'backend', 'backends', 'api', 'apis',
+  'service', 'services', 'microservice', 'microservices',
+  
+  // Configuration and environment
+  'config', 'configs', 'configuration', 'configurations',
+  'conf', 'confs', 'settings', 'env', 'environment', 'environments',
+  'deploy', 'deployment', 'deployments',
+  
+  // Test and documentation
+  'test', 'tests', 'testing', 'spec', 'specs', 'fixture', 'fixtures',
+  'mock', 'mocks', 'stub', 'stubs', 'doc', 'docs', 'documentation',
+  'example', 'examples', 'demo', 'demos', 'sample', 'samples',
+  
+  // Assets and static files
+  'public', 'private', 'internal', 'assets', 'static', 'statics',
+  'media', 'medias', 'image', 'images', 'img', 'imgs',
+  'style', 'styles', 'stylesheet', 'stylesheets', 'css', 'sass', 'scss', 'less',
+  'script', 'scripts', 'js', 'javascript', 'ts', 'typescript',
+  'font', 'fonts', 'icon', 'icons', 'favicon', 'favicons',
+  
+  // Framework-specific patterns
+  'cartridge', 'cartridges', 'module', 'modules', 'component', 'components',
+  'controller', 'controllers', 'model', 'models', 'view', 'views',
+  'route', 'routes', 'router', 'routers', 'middleware', 'middlewares',
+  'util', 'utils', 'utility', 'utilities', 'helper', 'helpers',
+  'plugin', 'plugins', 'extension', 'extensions', 'addon', 'addons',
+  'widget', 'widgets', 'element', 'elements',
+  
+  // Node.js and package management
+  'node_modules', 'package', 'packages', 'pkg', 'pkgs',
+  'bower_components', 'vendor', 'vendors', 'third_party', 'third-party',
+  
+  // Generated and auto-created
+  'generated', 'auto-generated', 'dfx-generated', 'build-generated',
+  'tmp', 'temp', 'temporary', 'cache', 'caches', 'cached',
+  'log', 'logs', 'logging', 'history', 'backup', 'backups',
+  
+  // Common project structures
+  'project', 'projects', 'workspace', 'workspaces',
+  'solution', 'solutions', 'worksheet', 'worksheets',
+  'repository', 'repositories', 'repo', 'repos',
+  
+  // Version control
+  'git', '.git', 'svn', '.svn', 'hg', '.hg',
+  
+  // IDE and editor specific
+  '.vscode', '.idea', '.vs', '.atom', '.sublime', '.editor',
+  
+  // Operating system
+  'system', 'systems', 'os', 'windows', 'win', 'linux', 'unix', 'mac', 'macos',
+  
+  // Common abbreviations
+  'inc', 'include', 'includes', 'inc', 'incorporated',
+  'corp', 'corporation', 'ltd', 'limited', 'llc', 'co', 'company',
+  'org', 'organization', 'foundation', 'fund', 'network',
+  
+  // Generic terms that are unlikely to be published packages
+  'local', 'locals', 'custom', 'customs', 'internal', 'internals',
+  'private', 'privates', 'personal', 'personals', 'user', 'users',
+  'home', 'homes', 'root', 'admin', 'administrator',
+  'data', 'database', 'databases', 'db', 'dbs',
+  'file', 'files', 'document', 'documents', 'archive', 'archives',
+  'content', 'contents', 'resource', 'resources', 'asset', 'assets',
+  'object', 'objects', 'entity', 'entities', 'item', 'items',
+  'page', 'pages', 'post', 'posts', 'article', 'articles',
+  'product', 'products', 'goods', 'service', 'services',
+  'order', 'orders', 'cart', 'carts', 'basket', 'baskets',
+  'payment', 'payments', 'invoice', 'invoices', 'bill', 'bills',
+  'account', 'accounts', 'user', 'users', 'member', 'members',
+  'profile', 'profiles', 'setting', 'settings', 'preference', 'preferences',
+  
+  // Common words that are typically local in context
+  'index', 'main', 'entry', 'entries', 'bootstrap', 'startup',
+  'core', 'base', 'common', 'shared', 'global', 'universal',
+  'framework', 'platform', 'engine', 'toolkit', 'sdk', 'api',
+  'interface', 'interfaces', 'implementation', 'implementations',
+  'factory', 'factories', 'manager', 'managers', 'handler', 'handlers',
+  'processor', 'processors', 'generator', 'generators', 'builder', 'builders',
+  'renderer', 'renderers', 'compiler', 'compilers', 'transpiler', 'transpilers',
+  'validator', 'validators', 'sanitizer', 'sanitizers', 'normalizer', 'normalizers',
+  'adapter', 'adapters', 'connector', 'connectors', 'bridge', 'bridges',
+  'wrapper', 'wrappers', 'proxy', 'proxies', 'gateway', 'gateways',
+  'client', 'clients', 'server', 'servers', 'host', 'hosts',
+  'endpoint', 'endpoints', 'url', 'urls', 'uri', 'uris',
+  'request', 'requests', 'response', 'responses', 'message', 'messages',
+  'event', 'events', 'listener', 'listeners', 'emitter', 'emitters',
+  'store', 'stores', 'storage', 'storages', 'repository', 'repositories',
+  'provider', 'providers', 'consumer', 'consumers', 'publisher', 'publishers',
+  'subscriber', 'subscribers', 'observer', 'observers', 'watcher', 'watchers',
+  'loader', 'loaders', 'parser', 'parsers', 'scanner', 'scanners',
+  'analyzer', 'analyzers', 'checker', 'checkers', 'tester', 'testers',
+  'runner', 'runners', 'executor', 'executors', 'scheduler', 'schedulers',
+  'timer', 'timers', 'counter', 'counters', 'meter', 'meters',
+  'collector', 'collectors', 'aggregator', 'aggregators', 'combinator', 'combinators',
+  'splitter', 'splitters', 'merger', 'mergers', 'joiner', 'joiners',
+  'filter', 'filters', 'mapper', 'mappers', 'reducer', 'reducers',
+  'transformer', 'transformers', 'converter', 'converters', 'encoder', 'encoders',
+  'decoder', 'decoders', 'compressor', 'compressors', 'decompressor', 'decompressors',
+  'encryptor', 'encryptors', 'decryptor', 'decryptors', 'hasher', 'hashers',
+  'signer', 'signers', 'verifier', 'verifiers', 'authenticator', 'authenticators',
+  'authorizer', 'authorizers', 'guard', 'guards', 'protector', 'protectors',
+  'validator', 'validators', 'sanitizer', 'sanitizers', 'normalizer', 'normalizers'
+];
+    
+    if (localPatterns.includes(firstPart)) {
+      return null;
+    }
+    
+    return firstPart;
   }
   
   // For regular packages without slashes
