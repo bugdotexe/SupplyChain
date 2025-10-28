@@ -33,7 +33,7 @@ if (process.argv.length < 3) {
   process.exit(1);
 }
 
-const rootDir = process.argv[2];
+const rootDir = path.resolve(process.argv[2]);
 const outputFile = process.argv[3] || 'available-packages.txt';
 
 // Store package occurrences with file paths
@@ -69,24 +69,26 @@ async function findFiles(dir) {
       }
     }
   } catch (err) {
-    console.warn(`[!] Warning: Unable to read directory ${dir}`);
+    console.warn(`Warning: Unable to read directory ${dir}`);
   }
   return results;
 }
 
 /**
- * Package name validation - filter out scoped packages and built-ins
+ * Enhanced package name validation
  */
 function isValidPackageName(name) {
+  // Skip relative/absolute paths and Node.js built-ins
   if (name.startsWith('.') || 
       name.startsWith('/') ||
-    //  name.startsWith('@') ||  // Filter out scoped packages
+      //name.startsWith('@') ||
       name.startsWith('node:') ||
       NODE_BUILTIN_MODULES.has(name)) {
     return false;
   }
   
-    const skipPatterns = [
+  // Skip common non-package imports
+      const skipPatterns = [
     /^https?:\/\//, // URLs
     /^\.\.?\//,     // Relative paths
     /^[a-z]:/i,     // Windows drive letters
@@ -94,14 +96,44 @@ function isValidPackageName(name) {
     /^file:\/\//,   // File URLs
   ];
   
+  // Filter out invalid single characters and special patterns
+  if (/^[^a-zA-Z0-9@]/.test(name) || /^[*~!@#$%^&()+={\}[\]|:;"'<>,?/`]$/.test(name)) {
+    return false;
+  }
+  
+  // Additional npm package naming validation
+  if (name.length === 0 || name.length > 214) return false;
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name)) return false;
+  
   return !skipPatterns.some(pattern => pattern.test(name));
 }
 
 /**
- * Normalize package names
+ * Enhanced package name normalization with slash counting
  */
 function normalizePackageName(packageName) {
-  return packageName.split('/')[0];
+  // Handle scoped packages (@scope/name) - always allow any number of slashes
+  if (packageName.startsWith('@') && packageName.includes('/')) {
+    const parts = packageName.split('/');
+    return parts.slice(0, 2).join('/');
+  }
+  
+  // For non-scoped packages, count the slashes
+  if (!packageName.startsWith('@')) {
+    const slashCount = (packageName.match(/\//g) || []).length;
+    
+    // If there are 2 or more slashes, it's likely a local path
+    if (slashCount >= 2) {
+      return null;
+    }
+    
+    // If there's exactly 1 slash, it's likely a deep import (like lodash/map)
+    // Extract just the package name part
+    return packageName.split('/')[0];
+  }
+  
+  // For regular packages without slashes
+  return packageName;
 }
 
 /**
@@ -189,7 +221,9 @@ async function extractImports(filePath) {
  */
 function trackPackageOccurrence(rawPackageName, filePath) {
   const normalizedName = normalizePackageName(rawPackageName);
-  if (!isValidPackageName(normalizedName)) return;
+  
+  // If normalization returns null, it's a local path, not an npm package
+  if (normalizedName === null || !isValidPackageName(normalizedName)) return;
   
   if (!packageOccurrences.has(normalizedName)) {
     packageOccurrences.set(normalizedName, new Set());
@@ -198,18 +232,16 @@ function trackPackageOccurrence(rawPackageName, filePath) {
 }
 
 /**
- * Check package availability using HTTPS (reliable method)
+ * Check package availability using HTTPS
  */
 function checkPackageAvailability(name) {
   return new Promise((resolve) => {
     const url = `https://registry.npmjs.org/${encodeURIComponent(name)}`;
     
     const req = https.get(url, (res) => {
-      // If status is 404, package is available
       if (res.statusCode === 404) {
         resolve({ name, status: 'Available', error: null });
       } else {
-        // Any other status means package exists
         resolve({ name, status: 'Taken', error: null });
       }
     });
@@ -248,24 +280,25 @@ async function checkPackagesBatch(packageNames) {
 }
 
 /**
- * Generate table format for console and file output
+ * Generate clean table format for output
  */
-function generateTable(data, columns) {
+function generateCleanTable(data) {
+  if (data.length === 0) return '';
+  
   // Calculate column widths
-  const colWidths = columns.map(col => 
-    Math.max(col.length, ...data.map(row => String(row[col] || '').length))
-  );
-
+  const pkgNameWidth = Math.max('Package Name'.length, ...data.map(row => row.packageName.length));
+  const filePathWidth = Math.max('File Path'.length, ...data.map(row => row.filePath.length));
+  
   // Create header
   let table = '';
-  table += columns.map((col, i) => col.padEnd(colWidths[i])).join(' | ') + '\n';
-  table += columns.map((col, i) => '-'.repeat(colWidths[i])).join('-|-') + '\n';
-
+  table += `${'Package Name'.padEnd(pkgNameWidth)} | ${'File Path'.padEnd(filePathWidth)}\n`;
+  table += `${'-'.repeat(pkgNameWidth)}-|-${'-'.repeat(filePathWidth)}\n`;
+  
   // Create rows
   data.forEach(row => {
-    table += columns.map((col, i) => String(row[col] || '').padEnd(colWidths[i])).join(' | ') + '\n';
+    table += `${row.packageName.padEnd(pkgNameWidth)} | ${row.filePath}\n`;
   });
-
+  
   return table;
 }
 
@@ -291,23 +324,22 @@ async function generateOutput(availablePackages, allResults) {
   
   // Only create output file if there are available packages
   if (availablePackages.length > 0) {
-    // Prepare data for table format
+    // Prepare data for clean table format
     const tableData = [];
     
     for (const pkgName of availablePackages.sort()) {
       const filePaths = Array.from(packageOccurrences.get(pkgName));
       filePaths.sort().forEach(filePath => {
-//        const relativePath = path.relative(rootDir, filePath);
-      const absolutePath = path.resolve(filePath); 
-       tableData.push({
-          'Package Name': pkgName,
-          'File Path': absolutePath
+        const absolutePath = path.resolve(filePath);
+        tableData.push({
+          packageName: pkgName,
+          filePath: absolutePath
         });
       });
     }
 
-    // Generate table format
-    const fileOutput = generateTable(tableData, ['Package Name', 'File Path']);
+    // Generate clean table format
+    const fileOutput = generateCleanTable(tableData);
     
     await fs.writeFile(outputFile, fileOutput, 'utf8');
     console.log(`\n[+] Scan results saved to: ${outputFile}`);
@@ -321,16 +353,19 @@ async function main() {
   try {
     await fs.access(rootDir);
   } catch (err) {
-    console.error(`[!] Error: Directory does not exist: ${rootDir}`);
+    console.error(`Error: Directory does not exist: ${rootDir}`);
     process.exit(1);
   }
+
+  console.log(`[*] Scanning directory: ${rootDir}`);
 
   // Step 1: Collect all files
   const allFiles = await findFiles(rootDir);
   if (allFiles.length === 0) {
-    console.log('[!] No source files found.');
+    console.log('No source files found.');
     return;
   }
+  console.log(`[*] Found ${allFiles.length} files to analyze`);
 
   // Step 2: Extract all package names and track occurrences
   let totalImports = 0;
@@ -341,14 +376,19 @@ async function main() {
     packages.forEach(pkg => trackPackageOccurrence(pkg, file));
   }
 
+  console.log(`[*] Extracted ${totalImports} import statements`);
+
   // Step 3: Get unique package candidates
   const candidates = Array.from(packageOccurrences.keys());
   if (candidates.length === 0) {
-    console.log('[!] No package names found to check.');
+    console.log('No package names found to check.');
     return;
   }
 
+  console.log(`[*] Found ${candidates.length} package candidates to check`);
+
   // Step 4: Check npm registry availability
+  console.log('[*] Checking package availability...');
   const results = await checkPackagesBatch(candidates);
   const availablePackages = results.filter(r => r.status === 'Available').map(r => r.name);
 
