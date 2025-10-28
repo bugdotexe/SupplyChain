@@ -137,7 +137,7 @@ function normalizePackageName(packageName) {
     /**
  * Comprehensive local directory and build artifact patterns
  */
-const LOCAL_DIRECTORY_PATTERNS = [
+const localPatterns = [
   // Build and output directories
   'dist', 'build', 'out', 'target', 'bin', 'output', 'release', 'releases',
   'debug', 'release', 'prod', 'production', 'stage', 'staging', 'dev', 'development',
