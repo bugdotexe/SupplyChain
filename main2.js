@@ -81,16 +81,18 @@ function isValidPackageName(name) {
   // Skip relative/absolute paths and Node.js built-ins
   if (name.startsWith('.') || 
       name.startsWith('/') ||
+      //name.startsWith('@') ||
+      name.startsWith('node:') ||
       NODE_BUILTIN_MODULES.has(name)) {
     return false;
   }
   
   // Skip common non-package imports
-  const skipPatterns = [
+      const skipPatterns = [
     /^https?:\/\//, // URLs
     /^\.\.?\//,     // Relative paths
     /^[a-z]:/i,     // Windows drive letters
-    /^\#/,          // Import maps/package imports
+    /^\#/,           // Import maps/package imports
     /^file:\/\//,   // File URLs
   ];
   
@@ -127,61 +129,127 @@ function normalizePackageName(packageName) {
     
     // If there's exactly 1 slash, it's likely a deep import (like lodash/map)
     // Extract just the package name part
+ //   return packageName.split('/')[0]; -> 
+//  } ->
     const firstPart = packageName.split('/')[0];
     
     // Filter out obvious local directory names
-    const localPatterns = [
-      // Build and output directories
-      'dist', 'build', 'out', 'target', 'bin', 'output', 'release', 'releases',
-      'debug', 'prod', 'production', 'stage', 'staging', 'dev', 'development',
-      
-      // Source code directories
-      'src', 'source', 'sources', 'lib', 'libs', 'library', 'libraries',
-      'app', 'apps', 'application', 'applications',
-      'web', 'webapp', 'webapps', 'site', 'sites',
-      'client', 'clients', 'frontend', 'frontends', 'ui', 'uis',
-      'server', 'servers', 'backend', 'backends', 'api', 'apis',
-      'service', 'services', 'microservice', 'microservices',
-      
-      // Configuration and environment
-      'config', 'configs', 'configuration', 'configurations',
-      'conf', 'confs', 'settings', 'env', 'environment', 'environments',
-      'deploy', 'deployment', 'deployments',
-      
-      // Test and documentation
-      'test', 'tests', 'testing', 'spec', 'specs', 'fixture', 'fixtures',
-      'mock', 'mocks', 'stub', 'stubs', 'doc', 'docs', 'documentation',
-      'example', 'examples', 'demo', 'demos', 'sample', 'samples',
-      
-      // Assets and static files
-      'public', 'private', 'internal', 'assets', 'static', 'statics',
-      'media', 'medias', 'image', 'images', 'img', 'imgs',
-      'style', 'styles', 'stylesheet', 'stylesheets', 'css', 'sass', 'scss', 'less',
-      'script', 'scripts', 'js', 'javascript', 'ts', 'typescript',
-      'font', 'fonts', 'icon', 'icons', 'favicon', 'favicons',
-      
-      // Framework-specific patterns
-      'cartridge', 'cartridges', 'module', 'modules', 'component', 'components',
-      'controller', 'controllers', 'model', 'models', 'view', 'views',
-      'route', 'routes', 'router', 'routers', 'middleware', 'middlewares',
-      'util', 'utils', 'utility', 'utilities', 'helper', 'helpers',
-      'plugin', 'plugins', 'extension', 'extensions', 'addon', 'addons',
-      'widget', 'widgets', 'element', 'elements',
-      
-      // Node.js and package management
-      'node_modules', 'package', 'packages', 'pkg', 'pkgs',
-      'bower_components', 'vendor', 'vendors', 'third_party', 'third-party',
-      
-      // Generated and auto-created
-      'generated', 'auto-generated', 'dfx-generated', 'build-generated',
-      'tmp', 'temp', 'temporary', 'cache', 'caches', 'cached',
-      'log', 'logs', 'logging', 'history', 'backup', 'backups',
-      
-      // Common project structures
-      'project', 'projects', 'workspace', 'workspaces',
-      'solution', 'solutions', 'worksheet', 'worksheets',
-      'repository', 'repositories', 'repo', 'repos',
-    ];
+    /**
+ * Comprehensive local directory and build artifact patterns
+ */
+const localPatterns = [
+  // Build and output directories
+  'dist', 'build', 'out', 'target', 'bin', 'output', 'release', 'releases',
+  'debug', 'release', 'prod', 'production', 'stage', 'staging', 'dev', 'development',
+  
+  // Source code directories
+  'src', 'source', 'sources', 'lib', 'libs', 'library', 'libraries',
+  'app', 'apps', 'application', 'applications',
+  'web', 'webapp', 'webapps', 'site', 'sites',
+  'client', 'clients', 'frontend', 'frontends', 'ui', 'uis',
+  'server', 'servers', 'backend', 'backends', 'api', 'apis',
+  'service', 'services', 'microservice', 'microservices',
+  
+  // Configuration and environment
+  'config', 'configs', 'configuration', 'configurations',
+  'conf', 'confs', 'settings', 'env', 'environment', 'environments',
+  'deploy', 'deployment', 'deployments',
+  
+  // Test and documentation
+  'test', 'tests', 'testing', 'spec', 'specs', 'fixture', 'fixtures',
+  'mock', 'mocks', 'stub', 'stubs', 'doc', 'docs', 'documentation',
+  'example', 'examples', 'demo', 'demos', 'sample', 'samples',
+  
+  // Assets and static files
+  'public', 'private', 'internal', 'assets', 'static', 'statics',
+  'media', 'medias', 'image', 'images', 'img', 'imgs',
+  'style', 'styles', 'stylesheet', 'stylesheets', 'css', 'sass', 'scss', 'less',
+  'script', 'scripts', 'js', 'javascript', 'ts', 'typescript',
+  'font', 'fonts', 'icon', 'icons', 'favicon', 'favicons',
+  
+  // Framework-specific patterns
+  'cartridge', 'cartridges', 'module', 'modules', 'component', 'components',
+  'controller', 'controllers', 'model', 'models', 'view', 'views',
+  'route', 'routes', 'router', 'routers', 'middleware', 'middlewares',
+  'util', 'utils', 'utility', 'utilities', 'helper', 'helpers',
+  'plugin', 'plugins', 'extension', 'extensions', 'addon', 'addons',
+  'widget', 'widgets', 'element', 'elements',
+  
+  // Node.js and package management
+  'node_modules', 'package', 'packages', 'pkg', 'pkgs',
+  'bower_components', 'vendor', 'vendors', 'third_party', 'third-party',
+  
+  // Generated and auto-created
+  'generated', 'auto-generated', 'dfx-generated', 'build-generated',
+  'tmp', 'temp', 'temporary', 'cache', 'caches', 'cached',
+  'log', 'logs', 'logging', 'history', 'backup', 'backups',
+  
+  // Common project structures
+  'project', 'projects', 'workspace', 'workspaces',
+  'solution', 'solutions', 'worksheet', 'worksheets',
+  'repository', 'repositories', 'repo', 'repos',
+  
+  // Version control
+  'git', '.git', 'svn', '.svn', 'hg', '.hg',
+  
+  // IDE and editor specific
+  '.vscode', '.idea', '.vs', '.atom', '.sublime', '.editor',
+  
+  // Operating system
+  'system', 'systems', 'os', 'windows', 'win', 'linux', 'unix', 'mac', 'macos',
+  
+  // Common abbreviations
+  'inc', 'include', 'includes', 'inc', 'incorporated',
+  'corp', 'corporation', 'ltd', 'limited', 'llc', 'co', 'company',
+  'org', 'organization', 'foundation', 'fund', 'network',
+  
+  // Generic terms that are unlikely to be published packages
+  'local', 'locals', 'custom', 'customs', 'internal', 'internals',
+  'private', 'privates', 'personal', 'personals', 'user', 'users',
+  'home', 'homes', 'root', 'admin', 'administrator',
+  'data', 'database', 'databases', 'db', 'dbs',
+  'file', 'files', 'document', 'documents', 'archive', 'archives',
+  'content', 'contents', 'resource', 'resources', 'asset', 'assets',
+  'object', 'objects', 'entity', 'entities', 'item', 'items',
+  'page', 'pages', 'post', 'posts', 'article', 'articles',
+  'product', 'products', 'goods', 'service', 'services',
+  'order', 'orders', 'cart', 'carts', 'basket', 'baskets',
+  'payment', 'payments', 'invoice', 'invoices', 'bill', 'bills',
+  'account', 'accounts', 'user', 'users', 'member', 'members',
+  'profile', 'profiles', 'setting', 'settings', 'preference', 'preferences',
+  
+  // Common words that are typically local in context
+  'index', 'main', 'entry', 'entries', 'bootstrap', 'startup',
+  'core', 'base', 'common', 'shared', 'global', 'universal',
+  'framework', 'platform', 'engine', 'toolkit', 'sdk', 'api',
+  'interface', 'interfaces', 'implementation', 'implementations',
+  'factory', 'factories', 'manager', 'managers', 'handler', 'handlers',
+  'processor', 'processors', 'generator', 'generators', 'builder', 'builders',
+  'renderer', 'renderers', 'compiler', 'compilers', 'transpiler', 'transpilers',
+  'validator', 'validators', 'sanitizer', 'sanitizers', 'normalizer', 'normalizers',
+  'adapter', 'adapters', 'connector', 'connectors', 'bridge', 'bridges',
+  'wrapper', 'wrappers', 'proxy', 'proxies', 'gateway', 'gateways',
+  'client', 'clients', 'server', 'servers', 'host', 'hosts',
+  'endpoint', 'endpoints', 'url', 'urls', 'uri', 'uris',
+  'request', 'requests', 'response', 'responses', 'message', 'messages',
+  'event', 'events', 'listener', 'listeners', 'emitter', 'emitters',
+  'store', 'stores', 'storage', 'storages', 'repository', 'repositories',
+  'provider', 'providers', 'consumer', 'consumers', 'publisher', 'publishers',
+  'subscriber', 'subscribers', 'observer', 'observers', 'watcher', 'watchers',
+  'loader', 'loaders', 'parser', 'parsers', 'scanner', 'scanners',
+  'analyzer', 'analyzers', 'checker', 'checkers', 'tester', 'testers',
+  'runner', 'runners', 'executor', 'executors', 'scheduler', 'schedulers',
+  'timer', 'timers', 'counter', 'counters', 'meter', 'meters',
+  'collector', 'collectors', 'aggregator', 'aggregators', 'combinator', 'combinators',
+  'splitter', 'splitters', 'merger', 'mergers', 'joiner', 'joiners',
+  'filter', 'filters', 'mapper', 'mappers', 'reducer', 'reducers',
+  'transformer', 'transformers', 'converter', 'converters', 'encoder', 'encoders',
+  'decoder', 'decoders', 'compressor', 'compressors', 'decompressor', 'decompressors',
+  'encryptor', 'encryptors', 'decryptor', 'decryptors', 'hasher', 'hashers',
+  'signer', 'signers', 'verifier', 'verifiers', 'authenticator', 'authenticators',
+  'authorizer', 'authorizers', 'guard', 'guards', 'protector', 'protectors',
+  'validator', 'validators', 'sanitizer', 'sanitizers', 'normalizer', 'normalizers'
+];
     
     if (localPatterns.includes(firstPart)) {
       return null;
@@ -195,7 +263,7 @@ function normalizePackageName(packageName) {
 }
 
 /**
- * Extract imports from file using AST parsing with robust error handling
+ * Extract imports from file using AST parsing
  */
 async function extractImports(filePath) {
   const pkgNames = [];
@@ -220,11 +288,10 @@ async function extractImports(filePath) {
         'dynamicImport'
       ],
       errorRecovery: true,
-      tokens: false
     });
   } catch (err) {
-    // If parsing fails, try a simpler regex-based approach as fallback
-    return extractImportsWithRegex(code);
+    // Skip files that cause parsing errors instead of using regex
+    return pkgNames;
   }
 
   try {
@@ -274,39 +341,11 @@ async function extractImports(filePath) {
       }
     });
   } catch (err) {
-    // If traversal fails, fall back to regex
-    console.warn(`[!] AST traversal failed for ${filePath}, using regex fallback: ${err.message}`);
-    return extractImportsWithRegex(code);
+    // Skip files that cause traversal errors instead of using regex
+    return pkgNames;
   }
 
   return pkgNames;
-}
-
-/**
- * Fallback regex-based import extraction
- */
-function extractImportsWithRegex(code) {
-  const pkgNames = [];
-  const patterns = [
-    // import statements
-    /import\s+.*?from\s+['"]([^'"]+)['"]/g,
-    /import\s+['"]([^'"]+)['"]/g,
-    // require statements
-    /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-    // dynamic imports
-    /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-    // export from statements
-    /export\s+.*?from\s+['"]([^'"]+)['"]/g
-  ];
-
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.exec(code)) !== null) {
-      pkgNames.push(match[1]);
-    }
-  }
-
-  return [...new Set(pkgNames)]; // Remove duplicates
 }
 
 /**
@@ -423,10 +462,10 @@ async function generateOutput(availablePackages, allResults) {
     for (const pkgName of availablePackages.sort()) {
       const filePaths = Array.from(packageOccurrences.get(pkgName));
       filePaths.sort().forEach(filePath => {
-        const relativePath = path.relative(rootDir, filePath);
+        const absolutePath = path.resolve(filePath);
         tableData.push({
           packageName: pkgName,
-          filePath: relativePath
+          filePath: absolutePath
         });
       });
     }
@@ -436,9 +475,6 @@ async function generateOutput(availablePackages, allResults) {
     
     await fs.writeFile(outputFile, fileOutput, 'utf8');
     console.log(`\n[+] Scan results saved to: ${outputFile}`);
-    console.log(`[+] Found ${availablePackages.length} available package names`);
-  } else {
-    console.log('\n[!] No available package names found');
   }
 }
 
@@ -465,14 +501,8 @@ async function main() {
 
   // Step 2: Extract all package names and track occurrences
   let totalImports = 0;
-  let processedFiles = 0;
   
   for (const file of allFiles) {
-    processedFiles++;
-    if (processedFiles % 100 === 0) {
-      console.log(`[*] Processed ${processedFiles}/${allFiles.length} files...`);
-    }
-    
     const packages = await extractImports(file);
     totalImports += packages.length;
     packages.forEach(pkg => trackPackageOccurrence(pkg, file));
